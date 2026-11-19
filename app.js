@@ -1279,7 +1279,7 @@ function tickTimers() {
   });
   if (changed && state.cook) drawCook();
   drawTimers();
-  document.querySelectorAll("[data-tkey]").forEach(n => { const t = state.timers.find(x => x.key === n.dataset.tkey); if (t && !t.done) n.textContent = fmtClock(leftOf(t, now)); });
+  document.querySelectorAll("[data-tkey]").forEach(n => { const t = state.timers.find(x => x.key === n.dataset.tkey); if (t && !t.done) { const x = fmtClock(leftOf(t, now)); n.textContent = x; n.classList.toggle("long", x.length > 5); } });
   document.querySelectorAll("[data-tring]").forEach(n => { const t = state.timers.find(x => x.key === n.getAttribute("data-tring")); if (t && !t.done) { const C = 2 * Math.PI * 64; n.setAttribute("stroke-dashoffset", String(C * (1 - Math.max(0, leftOf(t, now)) / t.sec))); } });
 }
 function curStepKey() { const c = state.cook; return c && c.step >= 0 ? c.r.id + ":" + c.step + ":" : null; }
@@ -1326,7 +1326,7 @@ function cookTimerCards(c, st) {
     const act = !t ? () => startTimer(sec, dev || st.sec || ("Schritt " + (c.step + 1)), key) : t.done ? () => stopTimer(t.id) : () => pauseTimer(t.id);
     const aria = !t ? "Timer starten" : t.done ? "Timer ausschalten" : t.paused ? "Weiter" : "Pause";
     const round = h("button", { class: "tmr-round" + (t ? t.done ? " done" : t.paused ? " paused" : " run" : ""), "aria-label": aria, onclick: act }, ring,
-      h("span", { class: "tmr-left", "data-tkey": t && !t.done ? key : null }, label),
+      h("span", { class: "tmr-left" + (label.length > 5 ? " long" : ""), "data-tkey": t && !t.done ? key : null }, label),
       t && t.done ? null : h("span", { class: "tmr-pp" }, icon(!t || t.paused ? "play2" : "pause")));
     return h("div", { class: "tmr-card" }, round,
       t ? h("div", { class: "tmr-ctrl" },
