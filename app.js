@@ -92,28 +92,17 @@ function normWord(w) { return w.toLowerCase().replace(/ä/g, "a").replace(/ö/g,
 const STOP = new Set(["und", "mit", "den", "dem", "der", "die", "das", "ein", "eine", "einer", "einem", "einen", "auf", "aus", "bei", "bis", "für", "von", "zum", "zur", "ihn", "sie", "alle", "alles", "etwas", "nach", "noch", "dann", "darin", "dazu", "oder", "nicht", "gut", "kurz", "lang", "min", "std", "grad", "minuten", "stunde", "stunden", "geben", "lassen"]);
 function wordsOf(t) { return (t.match(/[A-Za-zÄÖÜäöüß]+/g) || []).filter(w => w.length >= 3 && !STOP.has(w.toLowerCase())).map(normWord).filter(w => w.length >= 3); }
 function stepIngredients(r, text, links) {
-  const tw = wordsOf(text);
   let sec = "", items = [];
   (r.ingredients || []).forEach(i => { if (i.section) sec = i.section; else items.push({ i, sec }); });
   const secs = [...new Set(items.map(x => x.sec).filter(Boolean))];
-  const lower = text.toLowerCase();
   const lk = (links || []).map(x => x.toLowerCase());
   const linked = secs.filter(s => lk.includes(s.toLowerCase()));
   if (linked.length) {
     // verknüpfte Zutatenlisten: immer die ganze Liste zeigen
     return items.filter(x => linked.includes(x.sec)).map(x => x.i);
   }
-  if (!tw.length) return [];
-  const named = secs.filter(s => wordsOf(s).some(w => tw.includes(w)) || lower.includes(s.toLowerCase()));
-  if (named.length) items = items.filter(x => named.includes(x.sec) || !x.sec);
-  const hits = items.filter(({ i }) => {
-    const nw = wordsOf(i.name || ""); if (!nw.length) return false;
-    return nw.some(w => tw.some(t => t === w || (t.length >= 3 && w.endsWith(t)) || (w.length >= 4 && t.endsWith(w))));
-  });
-  // gleiche Zutat in mehreren Abschnitten: den Abschnitt nehmen, aus dem die meisten Treffer stammen
-  const cnt = {}; hits.forEach(x => cnt[x.sec] = (cnt[x.sec] || 0) + 1);
-  const best = {}; hits.forEach(x => { const k = (x.i.name || "").toLowerCase(); if (!best[k] || cnt[x.sec] > cnt[best[k].sec]) best[k] = x; });
-  return hits.filter(x => best[(x.i.name || "").toLowerCase()] === x).map(x => x.i);
+  // ohne verknüpfte Zutatenliste keine Zutaten am Schritt
+  return [];
 }
 function stepIngLine(r, text, f, cls, links) {
   const list = stepIngredients(r, text, links); if (!list.length) return null;
