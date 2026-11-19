@@ -148,7 +148,7 @@ function scaled(r) { const base = r.servings || 0, now = state.servings[r.id] ||
 function fmtMin(m) { if (!m) return ""; return m >= 60 ? Math.floor(m / 60) + " Std." + (m % 60 ? " " + (m % 60) + " Min." : "") : m + " Min."; }
 function norm(s) { return (s || "").toLocaleLowerCase("de").normalize("NFD").replace(/[̀-ͯ]/g, ""); }
 // Standardbild je Kategorie
-const CAT_IMG = [[/kuchen|gebäck|gebaeck|kekse|plätzchen/, "kuchen"], [/brot|brötchen|buns/, "brot"], [/dessert|nachtisch|süß/, "dessert"], [/haupt/, "hauptgericht"], [/suppe|eintopf/, "suppen"], [/sauce|soße|dip/, "saucen"], [/beilage|salat/, "beilagen"], [/grund|basis|teig/, "grundrezepte"]];
+const CAT_IMG = [[/kekse|plätzchen|cookies/, "kekse"], [/kuchen|gebäck|gebaeck/, "kuchen"], [/brot|brötchen|buns/, "brot"], [/dessert|nachtisch|süß/, "dessert"], [/haupt/, "hauptgericht"], [/suppe|eintopf/, "suppen"], [/sauce|soße|dip/, "saucen"], [/beilage|salat/, "beilagen"], [/grund|basis|teig/, "grundrezepte"]];
 function catImage(c) { const k = String(c || "").toLowerCase(); const m = CAT_IMG.find(([re]) => re.test(k)); return m ? "icons/kat-" + m[1] + ".svg" : "icons/standard.svg"; }
 function photoSrc(r) { return r.photo_path ? (state.photoUrls[r.photo_path] || {}).url || "" : ""; }
 function heroGallery(r) {
