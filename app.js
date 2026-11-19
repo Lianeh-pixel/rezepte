@@ -1294,7 +1294,7 @@ document.addEventListener("visibilitychange", () => {
   if (state.online) loadAll();
 });
 function openCook(r) {
-  state.cook = { r, step: -1, awake: false, f: scaled(r) };
+  state.cook = { r, step: 0, awake: false, f: scaled(r) };
   requestWake().then(ok => { if (state.cook) { state.cook.awake = ok; drawCook(); } });
   drawCook();
 }
@@ -1331,19 +1331,18 @@ function drawCook() {
   const c = state.cook; if (!c) return;
   let el = document.getElementById("cook");
   if (!el) { el = h("div", { class: "cook", id: "cook", role: "dialog", "aria-modal": "true", "aria-label": "Kochmodus" }); document.body.append(el); }
-  const steps = stepList(c.r), total = steps.length + 1, pos = c.step + 1;
-  const main = c.step < 0
-    ? [h("div", { class: "cook-label" }, "Zutaten bereitlegen" + (c.r.servings ? " · " + servLabel(c.r, Math.round(c.r.servings * c.f)) : "")),
-       h("ul", { class: "cook-ings" }, (c.r.ingredients || []).map(i => i.section ? h("li", null, h("span", { class: "cook-label" }, i.section)) : h("li", null, h("b", null, [fmtQty(i.qty != null ? i.qty * c.f : null), i.unit].filter(Boolean).join(" ")), " ", i.name)))]
+  const steps = stepList(c.r), total = Math.max(1, steps.length), pos = c.step + 1;
+  const main = !steps.length
+    ? [h("p", { class: "cook-text" }, "Für dieses Rezept ist noch keine Zubereitung eingetragen.")]
     : [h("div", { class: "cook-label" }, (steps[c.step].sec ? steps[c.step].sec + " · " : "") + "Schritt " + (c.step + 1) + " von " + steps.length), h("p", { class: "cook-text" }, linkedText(steps[c.step].text)), cookSide(c, steps[c.step])];
   el.replaceChildren(
     h("div", { class: "cook-top" }, h("h2", null, c.r.title), h("button", { class: "btn", onclick: closeCook }, "Beenden")),
     h("div", { class: "cook-progress", "aria-hidden": "true" }, h("div", { style: "width:" + Math.round(pos / total * 100) + "%" })),
     h("div", { class: "cook-main" }, main),
     h("div", { class: "cook-nav" },
-      h("button", { class: "btn", disabled: c.step < 0, onclick: () => { c.step--; drawCook(); } }, "← Zurück"),
+      h("button", { class: "btn", disabled: c.step <= 0, onclick: () => { c.step--; drawCook(); } }, "← Zurück"),
       c.step < steps.length - 1
-        ? h("button", { class: "btn primary", onclick: () => { c.step++; drawCook(); } }, c.step < 0 ? "Los geht's →" : "Weiter →")
+        ? h("button", { class: "btn primary", onclick: () => { c.step++; drawCook(); } }, "Weiter →")
         : h("button", { class: "btn primary", onclick: closeCook }, "Fertig ✓")));
   drawTimers();
 }
@@ -1351,7 +1350,7 @@ document.addEventListener("keydown", e => {
   const c = state.cook; if (!c) return;
   if (e.key === "Escape") closeCook();
   else if (e.key === "ArrowRight" && c.step < stepList(c.r).length - 1) { c.step++; drawCook(); }
-  else if (e.key === "ArrowLeft" && c.step >= 0) { c.step--; drawCook(); }
+  else if (e.key === "ArrowLeft" && c.step > 0) { c.step--; drawCook(); }
 });
 // Rezeptansicht: Wischen. Zur rechten Seite (Finger nach links) -> Zubereitung, zur linken Seite (Finger nach rechts) -> Zutaten bzw. Inhaltsverzeichnis
 let swipe = null;
@@ -1375,7 +1374,7 @@ document.addEventListener("touchend", e => {
   const dx = e.changedTouches[0].clientX - touchX; touchX = null;
   if (Math.abs(dx) < 60) return;
   if (dx < 0 && c.step < stepList(c.r).length - 1) c.step++;
-  else if (dx > 0 && c.step >= 0) c.step--;
+  else if (dx > 0 && c.step > 0) c.step--;
   else return;
   drawCook();
 }, { passive: true });
