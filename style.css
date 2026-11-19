@@ -8,8 +8,8 @@
   --line: #d5dcd3;
   --basil: #2f6b4a;
   --basil-ink: #ffffff;
-  --saffron: #f2b632;
-  --saffron-soft: #fbecc4;
+  --saffron: #6fae88;
+  --saffron-soft: #dde9df;
   --danger: #b23a2e;
   --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
   --font-body: "Figtree", "Segoe UI", system-ui, -apple-system, sans-serif;
@@ -17,10 +17,10 @@
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
   --bg: #141916; --surface: #1d2420; --sunk: #252d28; --fg: #e8eee9; --muted: #9aa9a0; --line: #334039;
-  --basil: #7cc59a; --basil-ink: #0f1a14; --saffron: #f2b632; --saffron-soft: #3d3216; --danger: #f08072; color-scheme: dark; } }
+  --basil: #7cc59a; --basil-ink: #0f1a14; --saffron: #6fae88; --saffron-soft: #26382d; --danger: #f08072; color-scheme: dark; } }
 :root[data-theme="dark"] {
   --bg: #141916; --surface: #1d2420; --sunk: #252d28; --fg: #e8eee9; --muted: #9aa9a0; --line: #334039;
-  --basil: #7cc59a; --basil-ink: #0f1a14; --saffron: #f2b632; --saffron-soft: #3d3216; --danger: #f08072; color-scheme: dark; }
+  --basil: #7cc59a; --basil-ink: #0f1a14; --saffron: #6fae88; --saffron-soft: #26382d; --danger: #f08072; color-scheme: dark; }
 
 * { box-sizing: border-box; }
 body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 16px; line-height: 1.5; }
@@ -275,3 +275,7 @@ button { cursor: pointer; }
 .d-nut > div, .d-nut > div.k { background: none; border: 0; border-radius: 0; padding: 0; min-width: 0; color: var(--muted); }
 .d-nut b, .d-nut > div:not(.k) b { display: inline; font-family: inherit; font-size: 13px; font-weight: 600; color: var(--fg); margin-right: 3px; }
 .d-nut > div.k b { color: var(--basil); }
+/* Zutaten je Schritt */
+.step-ings { margin: 6px 0 0; font-size: 14px; color: var(--muted); line-height: 1.5; }
+.step-ings b, .cook-step-ings b { color: var(--basil); font-weight: 600; font-variant-numeric: tabular-nums; }
+.cook-step-ings { margin: 22px 0 0; font-size: clamp(17px, 2.4vw, 22px); color: var(--muted); line-height: 1.6; max-width: 40ch; }

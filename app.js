@@ -71,6 +71,31 @@ function fmtQty(q) {
   return String(r).replace(".", ",");
 }
 function ingToLine(i) { return i.section ? i.section + ":" : [fmtQty(i.qty), i.unit, i.name].filter(Boolean).join(" "); }
+// Zutaten, die in einem Zubereitungsschritt vorkommen (automatisch per Name erkannt)
+function normWord(w) { return w.toLowerCase().replace(/ä/g, "a").replace(/ö/g, "o").replace(/ü/g, "u").replace(/ß/g, "ss").replace(/(en|n|e|s)$/, ""); }
+const STOP = new Set(["und", "mit", "den", "dem", "der", "die", "das", "ein", "eine", "einer", "einem", "einen", "auf", "aus", "bei", "bis", "für", "von", "zum", "zur", "ihn", "sie", "alle", "alles", "etwas", "nach", "noch", "dann", "darin", "dazu", "oder", "nicht", "gut", "kurz", "lang", "min", "std", "grad", "minuten", "stunde", "stunden", "geben", "lassen"]);
+function wordsOf(t) { return (t.match(/[A-Za-zÄÖÜäöüß]+/g) || []).filter(w => w.length >= 3 && !STOP.has(w.toLowerCase())).map(normWord).filter(w => w.length >= 3); }
+function stepIngredients(r, text) {
+  const tw = wordsOf(text); if (!tw.length) return [];
+  let sec = "", items = [];
+  (r.ingredients || []).forEach(i => { if (i.section) sec = i.section; else items.push({ i, sec }); });
+  const secs = [...new Set(items.map(x => x.sec).filter(Boolean))];
+  const lower = text.toLowerCase();
+  const named = secs.filter(s => wordsOf(s).some(w => tw.includes(w)) || lower.includes(s.toLowerCase()));
+  if (named.length) items = items.filter(x => named.includes(x.sec) || !x.sec);
+  const hits = items.filter(({ i }) => {
+    const nw = wordsOf(i.name || ""); if (!nw.length) return false;
+    return nw.some(w => tw.some(t => t === w || (t.length >= 3 && w.endsWith(t)) || (w.length >= 4 && t.endsWith(w))));
+  });
+  // gleiche Zutat in mehreren Abschnitten: den Abschnitt nehmen, aus dem die meisten Treffer stammen
+  const cnt = {}; hits.forEach(x => cnt[x.sec] = (cnt[x.sec] || 0) + 1);
+  const best = {}; hits.forEach(x => { const k = (x.i.name || "").toLowerCase(); if (!best[k] || cnt[x.sec] > cnt[best[k].sec]) best[k] = x; });
+  return hits.filter(x => best[(x.i.name || "").toLowerCase()] === x).map(x => x.i);
+}
+function stepIngLine(r, text, f, cls) {
+  const list = stepIngredients(r, text); if (!list.length) return null;
+  return h("p", { class: cls }, list.map((i, k) => [k ? " · " : "", h("b", null, [fmtQty(i.qty != null ? i.qty * f : null), i.unit].filter(Boolean).join(" ")), (i.qty != null || i.unit ? " " : "") + i.name]));
+}
 function scaled(r) { const base = r.servings || 0, now = state.servings[r.id] || base; return base ? now / base : 1; }
 function fmtMin(m) { if (!m) return ""; return m >= 60 ? Math.floor(m / 60) + " Std." + (m % 60 ? " " + (m % 60) + " Min." : "") : m + " Min."; }
 function norm(s) { return (s || "").toLocaleLowerCase("de").normalize("NFD").replace(/[̀-ͯ]/g, ""); }
@@ -357,7 +382,7 @@ function renderDetail(id) {
           h("span", null, i.name))))]) : h("p", { class: "meta" }, "Keine Zutaten eingetragen."),
       nutritionBlock(r));
   } else {
-    body = (r.steps || []).length ? h("ol", { class: "steps" }, r.steps.map(s => h("li", null, h("p", null, s)))) : h("p", { class: "meta" }, "Keine Schritte eingetragen.");
+    body = (r.steps || []).length ? h("ol", { class: "steps" }, r.steps.map(s => h("li", null, h("div", null, h("p", null, s), stepIngLine(r, s, f, "step-ings"))))) : h("p", { class: "meta" }, "Keine Schritte eingetragen.");
   }
 
   app.append(hero, h("div", { class: "d-sheet" },
@@ -650,7 +675,7 @@ function drawCook() {
   const main = c.step < 0
     ? [h("div", { class: "cook-label" }, "Zutaten bereitlegen" + (c.r.servings ? " · " + Math.round(c.r.servings * c.f) + " Portionen" : "")),
        h("ul", { class: "cook-ings" }, (c.r.ingredients || []).map(i => i.section ? h("li", null, h("span", { class: "cook-label" }, i.section)) : h("li", null, h("b", null, [fmtQty(i.qty != null ? i.qty * c.f : null), i.unit].filter(Boolean).join(" ")), " ", i.name)))]
-    : [h("div", { class: "cook-label" }, "Schritt " + (c.step + 1) + " von " + steps.length), h("p", { class: "cook-text" }, steps[c.step])];
+    : [h("div", { class: "cook-label" }, "Schritt " + (c.step + 1) + " von " + steps.length), h("p", { class: "cook-text" }, steps[c.step]), stepIngLine(c.r, steps[c.step], c.f, "cook-step-ings")];
   el.replaceChildren(
     h("div", { class: "cook-top" }, h("h2", null, c.r.title), h("button", { class: "btn", onclick: closeCook }, "Beenden")),
     h("div", { class: "cook-progress", "aria-hidden": "true" }, h("div", { style: "width:" + Math.round(pos / total * 100) + "%" })),
