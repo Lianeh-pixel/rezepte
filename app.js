@@ -14,7 +14,7 @@ const URL_KEY = "rb-photo-urls-v1";
 const state = {
   user: null, authReady: false, authMode: "login", authMsg: "", authErr: "", authBusy: false,
   recipes: [], foods: [], loaded: false, loadError: "", online: navigator.onLine,
-  query: "", cat: "", favOnly: false,
+  query: "", cat: "", favOnly: false, homeView: (() => { try { return localStorage.getItem("rb-home") || "cards"; } catch (e) { return "cards"; } })(), carCat: "",
   route: { view: "list" },
   servings: {}, checked: {},
   confirmDelete: false, saving: false, formError: "",
@@ -421,6 +421,7 @@ function renderList() {
     h("h1", null, "Rezeptbuch"),
     h("div", { class: "h-tools" },
       !state.online ? h("span", { class: "offline" }, "offline") : null,
+      state.recipes.length ? h("button", { class: "h-fav h-view", "aria-label": state.homeView === "cards" ? "Als Inhaltsverzeichnis zeigen" : "Als Karten zeigen", onclick: () => { state.homeView = state.homeView === "cards" ? "list" : "cards"; try { localStorage.setItem("rb-home", state.homeView); } catch (e) {} state.menuOpen = false; render(); } }, icon(state.homeView === "cards" ? "list" : "cards")) : null,
       h("button", { class: "h-fav" + (state.favOnly ? " on" : ""), "aria-label": state.favOnly ? "Alle Rezepte zeigen" : "Nur Favoriten zeigen", "aria-pressed": state.favOnly ? "true" : "false", onclick: () => { state.favOnly = !state.favOnly; state.menuOpen = false; render(); } }, icon("heart", state.favOnly)),
       h("button", { class: "h-menu-btn", "aria-label": "Menü", "aria-expanded": menuOpen ? "true" : "false", onclick: () => { state.menuOpen = !menuOpen; render(); } },
         h("img", { class: "logo-l", src: "icons/icon.svg", alt: "", width: "36", height: "36" }), h("img", { class: "logo-d", src: "icons/icon-dark.svg", alt: "", width: "36", height: "36" })),
@@ -454,6 +455,8 @@ function renderGridOnly() {
   const groups = new Map();
   list.forEach(r => { const c = r.category || "Ohne Kategorie"; if (!groups.has(c)) groups.set(c, []); groups.get(c).push(r); });
   const names = [...groups.keys()].sort(catCmp);
+  app.classList.toggle("carmode", state.homeView === "cards" && !state.query.trim());
+  if (state.homeView === "cards" && !state.query.trim()) return renderCarousel(host, names, groups);
   host.replaceChildren(h("div", { class: "toc" }, names.map(c => {
     const rs = groups.get(c).sort((a, b) => a.title.localeCompare(b.title, "de"));
     const draft = catRank(c) === 2;
@@ -472,6 +475,77 @@ function renderGridOnly() {
       })));
   })));
 }
+const MOTIFS = {
+  kuchen: '<path d="M40 110h120"/><path d="M50 110V78c0-6 4-10 10-10h80c6 0 10 4 10 10v32"/><path d="M50 88c12 6 22 6 33 0s22-6 34 0 22 6 33 0"/><path d="M100 68V50"/><path d="M100 50c-5-5-3-11 0-16 3 5 5 11 0 16z"/>',
+  kekse: '<circle cx="85" cy="85" r="34"/><circle cx="140" cy="102" r="20"/><circle cx="75" cy="75" r="3"/><circle cx="96" cy="72" r="3"/><circle cx="86" cy="96" r="3"/><circle cx="102" cy="92" r="3"/><circle cx="138" cy="96" r="2.5"/><circle cx="146" cy="108" r="2.5"/>',
+  brot: '<path d="M35 112c0-30 25-50 65-50s65 20 65 50z"/><path d="M70 78l12 14M98 72l12 14M126 78l12 14"/>',
+  topf: '<path d="M45 76h110v34a22 22 0 0 1-22 22H67a22 22 0 0 1-22-22z"/><path d="M35 76h130M45 88H32M155 88h13"/><path d="M80 62c-6-8 6-12 0-20M100 62c-6-8 6-12 0-20M120 62c-6-8 6-12 0-20"/>',
+  nuggets: '<path d="M50 100c-6-14 6-26 20-24 10-12 30-6 30 8 8 14-6 28-22 24-12 6-26 4-28-8z"/><path d="M110 104c-4-12 6-22 18-20 8-10 26-4 24 8 6 12-6 22-20 20-10 6-22 2-22-8z"/><path d="M40 122h120"/>',
+  pudding: '<path d="M70 70h60l-8 38H78z"/><path d="M100 108v18M84 126h32"/><path d="M74 70c4-12 48-12 52 0"/><path d="M112 58l10-14"/>',
+  lasagne: '<path d="M30 70h140v50H30z"/><path d="M30 86c20 8 30-6 47 0s30 8 47 0 30-6 46 0"/><path d="M30 103c20 8 30-6 47 0s30 8 47 0 30-6 46 0"/><path d="M40 70c10-14 30-16 40-6M95 70c10-12 28-14 38-4M140 68c8-8 20-6 24 2"/>',
+  schale: '<path d="M40 85h120c0 26-26 40-60 40s-60-14-60-40z"/><path d="M52 85c4-14 18-20 30-14 8-10 26-10 34 0 12-6 28 0 32 14"/>',
+  sauce: '<path d="M48 84h96c0 22-20 36-48 36s-48-14-48-36z"/><path d="M144 90c12-2 20 6 14 16"/><path d="M48 84c-8-2-14-8-14-14"/><path d="M76 132h48"/><path d="M100 120v12"/>',
+  stift: '<path d="M60 125l6-22 62-62 16 16-62 62z"/><path d="M66 103l16 16M120 49l16 16"/><path d="M40 130h120"/>'
+};
+const MOTIF_CAT = [[/kekse|plätzchen/, "kekse"], [/kuchen|gebäck|torte/, "kuchen"], [/brot|teig/, "brot"], [/dessert|nachtisch/, "pudding"], [/pasta|auflauf|aufläufe|nudel/, "lasagne"], [/snack|finger/, "nuggets"], [/sauce|soße|dip/, "sauce"], [/beilage|salat/, "schale"], [/draft|entw/, "stift"]];
+function motif(c) {
+  const k = String(c || "").toLowerCase(), m = MOTIF_CAT.find(([re]) => re.test(k));
+  const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  s.setAttribute("viewBox", "20 30 160 105"); s.setAttribute("class", "sl-mot"); s.setAttribute("aria-hidden", "true");
+  s.innerHTML = MOTIFS[m ? m[1] : "topf"]; return s;
+}
+function romanNum(n) { const t = [[50, "L"], [40, "XL"], [10, "X"], [9, "IX"], [5, "V"], [4, "IV"], [1, "I"]]; let r = ""; for (const [v, x] of t) while (n >= v) { r += x; n -= v; } return r; }
+function renderCarousel(host, names, groups) {
+  const wide = window.matchMedia("(min-width: 900px)").matches;
+  let idx = Math.max(0, names.indexOf(state.carCat));
+  const slides = names.map((c, i) => {
+    const rs = groups.get(c).sort((a, b) => a.title.localeCompare(b.title, "de"));
+    const draft = catRank(c) === 2;
+    const ul = h("ul", { class: "sl-lst" }, rs.map(r => {
+      const time = (r.prep_min || 0) + (r.cook_min || 0);
+      if (draft && isGuest()) return h("li", null, h("span", { class: "sl-ln off" }, h("span", { class: "t" }, r.title || "Ohne Titel"), h("span", { class: "tm" }, "folgt bald")));
+      return h("li", null, h("a", { href: "#rezept-" + r.id, class: "sl-ln" }, h("span", { class: "t" }, r.title || "Ohne Titel"), h("span", { class: "tm" }, time ? fmtMin(time) : "")));
+    }));
+    if (wide && rs.length > 1) { ul.style.gridTemplateRows = "repeat(" + Math.ceil(rs.length / 2) + ", var(--row))"; ul.classList.add("two"); }
+    const fade = () => ul.classList.toggle("more", ul.scrollHeight - ul.scrollTop - ul.clientHeight > 4);
+    ul.addEventListener("scroll", fade, { passive: true });
+    requestAnimationFrame(fade);
+    return h("section", { class: "slide" + (draft ? " draft" : "") + (i === idx ? " on" : ""), "aria-label": c, onclick: e => { if (!e.currentTarget.classList.contains("on")) { e.preventDefault(); goTo(i); } } },
+      h("header", { class: "sl-h" },
+        h("div", null,
+          h("div", { class: "sl-no" }, draft ? "Entwürfe" : "Kapitel " + romanNum(i + 1)),
+          h("h2", null, c),
+          h("div", { class: "sl-cnt" }, rs.length + (rs.length === 1 ? " Rezept" : " Rezepte"))),
+        motif(c)),
+      h("div", { class: "sl-rule" }), ul);
+  });
+  const car = h("div", { class: "car" }, slides);
+  const left = h("button", { class: "car-ar l", "aria-label": "Vorherige Kategorie", onclick: () => goTo(idx - 1) }, icon("chevL"));
+  const right = h("button", { class: "car-ar r", "aria-label": "Nächste Kategorie", onclick: () => goTo(idx + 1) }, icon("chevR"));
+  const dots = h("div", { class: "car-dots" }, names.map((c, i) => h("button", { "aria-label": c, class: i === idx ? "on" : "", onclick: () => goTo(i) })));
+  const wrap = h("div", { class: "car-wrap" }, car, left, right, dots);
+  host.replaceChildren(wrap);
+  const step = () => { const a = slides[0], b = slides[1]; return b ? b.offsetLeft - a.offsetLeft : car.clientWidth; };
+  function mark(i) {
+    idx = i; state.carCat = names[i] || "";
+    slides.forEach((s, k) => s.classList.toggle("on", k === i));
+    [...dots.children].forEach((d, k) => d.classList.toggle("on", k === i));
+    left.hidden = i <= 0; right.hidden = i >= names.length - 1;
+  }
+  function goTo(i) { if (i < 0 || i >= names.length) return; car.scrollTo({ left: i * step(), behavior: "smooth" }); mark(i); }
+  let raf = 0;
+  car.addEventListener("scroll", () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(() => { const i = Math.round(car.scrollLeft / step()); if (i !== idx) mark(Math.max(0, Math.min(names.length - 1, i))); }); }, { passive: true });
+  sizeCarousel();
+  car.scrollLeft = idx * step();
+  mark(idx);
+}
+function sizeCarousel() {
+  const w = document.querySelector(".car-wrap"); if (!w) return;
+  const top = w.getBoundingClientRect().top + window.scrollY;
+  w.style.height = Math.max(360, window.innerHeight - top) + "px";
+}
+let carWide = window.matchMedia("(min-width: 900px)").matches;
+window.addEventListener("resize", () => { if (!document.querySelector(".car-wrap")) return; const w = window.matchMedia("(min-width: 900px)").matches; if (w !== carWide) { carWide = w; renderGridOnly(); } else sizeCarousel(); });
 document.addEventListener("click", e => { if (state.menuOpen && !e.target.closest(".h-tools")) { state.menuOpen = false; render(); } });
 
 const ICONS = {
@@ -496,6 +570,10 @@ const ICONS = {
   pot: '<path d="M4 10h16M5 10v7a3 3 0 0 0 3 3h8a3 3 0 0 0 3-3v-7M2.5 10h2M19.5 10h2M9 7c-.9-1.1.9-1.7 0-3M15 7c-.9-1.1.9-1.7 0-3"/>',
   thermo: '<path d="M14 14.8V5a2 2 0 0 0-4 0v9.8a4 4 0 1 0 4 0z"/><path d="M12 9v7"/>',
   image: '<rect x="3" y="5" width="18" height="14" rx="3"/><circle cx="9" cy="10" r="1.8"/><path d="M21 16l-5-5-8 8"/>',
+  list: '<path d="M9.5 6H20M9.5 12H20M9.5 18H20"/><path d="M4.5 6h.01M4.5 12h.01M4.5 18h.01" stroke-width="2.8"/>',
+  cards: '<rect x="6.5" y="4" width="11" height="16" rx="2.5"/><path d="M3 7.5v9M21 7.5v9"/>',
+  chevL: '<path d="M15 4.5L7.5 12l7.5 7.5"/>',
+  chevR: '<path d="M9 4.5l7.5 7.5L9 19.5"/>',
   link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>'
 };
 function icon(name, filled) {
