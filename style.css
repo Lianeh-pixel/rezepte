@@ -1,26 +1,28 @@
 /* Layout: kitchen-shelf grid of recipe cards; recipe sheet with ingredient column beside numbered steps; full-screen cooking mode. */
 :root {
-  --bg: #f3f5f1;
+  /* Petrol-Thema: hell */
+  --bg: #f2f5f5;
   --surface: #ffffff;
-  --sunk: #e7ebe4;
-  --fg: #1d2420;
-  --muted: #5c6a62;
-  --line: #d5dcd3;
-  --basil: #2f6b4a;
+  --sunk: #e6ecec;
+  --fg: #1c2a2c;
+  --muted: #5d6f71;
+  --line: #d5dfdf;
+  --basil: #17797e;      /* Petrol fuer Schrift-Akzente */
+  --btn: #1b8a8f;        /* Petrol fuer gefuellte Knoepfe */
   --basil-ink: #ffffff;
-  --saffron: #6fae88;
-  --saffron-soft: #dde9df;
+  --saffron: #3fb6b4;
+  --saffron-soft: #dcecec;
   --danger: #b23a2e;
-  --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
-  --font-body: "Figtree", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-display: "Playfair Display", Georgia, "Times New Roman", serif;
+  --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   --r: 14px;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
-  --bg: #141916; --surface: #1d2420; --sunk: #252d28; --fg: #e8eee9; --muted: #9aa9a0; --line: #334039;
-  --basil: #7cc59a; --basil-ink: #0f1a14; --saffron: #6fae88; --saffron-soft: #26382d; --danger: #f08072; color-scheme: dark; } }
+  --bg: #1f2b2d; --surface: #263437; --sunk: #2f3f42; --fg: #eef3f2; --muted: #a2b3b2; --line: #3b4c4f;
+  --basil: #3aaeb0; --btn: #1b8a8f; --basil-ink: #0e2224; --saffron: #3fb6b4; --saffron-soft: #21474a; --danger: #f08a7e; color-scheme: dark; } }
 :root[data-theme="dark"] {
-  --bg: #141916; --surface: #1d2420; --sunk: #252d28; --fg: #e8eee9; --muted: #9aa9a0; --line: #334039;
-  --basil: #7cc59a; --basil-ink: #0f1a14; --saffron: #6fae88; --saffron-soft: #26382d; --danger: #f08072; color-scheme: dark; }
+  --bg: #1f2b2d; --surface: #263437; --sunk: #2f3f42; --fg: #eef3f2; --muted: #a2b3b2; --line: #3b4c4f;
+  --basil: #3aaeb0; --btn: #1b8a8f; --basil-ink: #0e2224; --saffron: #3fb6b4; --saffron-soft: #21474a; --danger: #f08a7e; color-scheme: dark; }
 
 * { box-sizing: border-box; }
 body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 16px; line-height: 1.5; }
@@ -38,7 +40,7 @@ button { cursor: pointer; }
 .actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .btn { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 9px 16px; font-weight: 600; font-size: 15px; display: inline-flex; align-items: center; gap: 6px; min-height: 42px; }
 .btn:hover { border-color: var(--muted); }
-.btn.primary { background: var(--basil); color: var(--basil-ink); border-color: var(--basil); }
+.btn.primary { background: var(--btn); color: var(--basil-ink); border-color: var(--btn); }
 .btn.danger { color: var(--danger); }
 .btn.danger.solid { background: var(--danger); color: #fff; border-color: var(--danger); }
 .btn.ghost { background: transparent; border-color: transparent; }
@@ -406,3 +408,25 @@ button { cursor: pointer; }
 .round.fav-on .ic { fill: currentColor; }
 .mrow .f-sunit { width: auto !important; flex: none; border: 0 !important; padding: 7px 10px !important; background: var(--sunk) !important; border-radius: 8px !important; }
 .mrow:focus-within .f-sunit { outline: none; }
+/* mehrere Fotos */
+.ph-badge { position: absolute; left: 10px; top: 10px; font-size: 12px; font-weight: 700; letter-spacing: .04em; color: #1d2420; background: rgba(255,255,255,.92); border-radius: 999px; padding: 4px 10px; }
+.ph-strip { display: flex; gap: 8px; overflow-x: auto; padding: 10px 0 2px; scrollbar-width: none; }
+.ph-th { flex: none; width: 64px; height: 64px; border-radius: 12px; overflow: hidden; padding: 0; border: 2px solid transparent; background: var(--sunk); cursor: pointer; }
+.ph-th img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ph-th.on { border-color: var(--basil); }
+.ph-add { display: grid; place-items: center; font-size: 26px; color: var(--basil); border: 1.5px dashed var(--line); }
+.gal { position: absolute; inset: 0; display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
+.gal::-webkit-scrollbar { display: none; }
+.gal img { position: relative !important; flex: none; width: 100%; height: 100%; object-fit: cover; scroll-snap-align: start; }
+.gal-dots { position: absolute; left: 0; right: 0; bottom: 34px; display: flex; justify-content: center; gap: 6px; pointer-events: none; }
+.gal-dots i { width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,.55); }
+.gal-dots i.on { background: #fff; }
+
+/* Petrol-Thema: gefuellte Flaechen */
+.fab, .d-dock .btn, .cook-progress div, .dlg-opt.on .dlg-check { background: var(--btn) !important; border-color: var(--btn) !important; color: var(--basil-ink) !important; }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .fab, :root:not([data-theme="dark"]) .d-dock .btn, :root:not([data-theme="dark"]) .btn.primary { color: #ffffff !important; } }
+:root[data-theme="light"] .btn.primary { color: #ffffff !important; }
+h1, h2, h3, .d-title, .chap { font-family: var(--font-display); font-weight: 600; letter-spacing: 0; }
+.f-sec > h3 { font-family: var(--font-body); }
+.toc .chap, .chap { color: var(--basil); }
+.chap span { color: var(--muted); }

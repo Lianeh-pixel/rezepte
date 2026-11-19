@@ -127,6 +127,16 @@ function scaled(r) { const base = r.servings || 0, now = state.servings[r.id] ||
 function fmtMin(m) { if (!m) return ""; return m >= 60 ? Math.floor(m / 60) + " Std." + (m % 60 ? " " + (m % 60) + " Min." : "") : m + " Min."; }
 function norm(s) { return (s || "").toLocaleLowerCase("de").normalize("NFD").replace(/[̀-ͯ]/g, ""); }
 function photoSrc(r) { return r.photo_path ? (state.photoUrls[r.photo_path] || {}).url || "" : ""; }
+function heroGallery(r) {
+  const urls = photoPaths(r).map(urlFor).filter(Boolean);
+  if (urls.length < 2) return h("img", { src: urls[0] || photoSrc(r), alt: "" });
+  const track = h("div", { class: "gal" }, urls.map(u => h("img", { src: u, alt: "" })));
+  const dots = h("div", { class: "gal-dots", "aria-hidden": "true" }, urls.map((_, k) => h("i", { class: k === 0 ? "on" : null })));
+  track.addEventListener("scroll", () => { const k = Math.round(track.scrollLeft / track.clientWidth); [...dots.children].forEach((d, j) => d.classList.toggle("on", j === k)); }, { passive: true });
+  return [track, dots];
+}
+function photoPaths(r) { return [r.photo_path, ...(r.photos || [])].filter(Boolean); }
+function urlFor(path) { return (state.photoUrls[path] || {}).url || ""; }
 function categories() { const s = new Set(); state.recipes.forEach(r => r.category && s.add(r.category)); return [...s].sort((a, b) => a.localeCompare(b, "de")); }
 function allTags() { const s = new Set(); state.recipes.forEach(r => (r.tags || []).forEach(t => s.add(t))); return [...s].sort((a, b) => a.localeCompare(b, "de")); }
 function filtered() {
@@ -165,7 +175,7 @@ function rerenderKeepingForm() {
   render();
 }
 async function refreshPhotoUrls() {
-  const now = Date.now(), need = state.recipes.map(r => r.photo_path).filter(p => p && !(state.photoUrls[p] && state.photoUrls[p].exp > now + 3600e3));
+  const now = Date.now(), need = state.recipes.flatMap(photoPaths).filter(p => p && !(state.photoUrls[p] && state.photoUrls[p].exp > now + 3600e3));
   if (!need.length) return;
   const { data, error } = await sb.storage.from("photos").createSignedUrls([...new Set(need)], 7 * 24 * 3600);
   if (error || !data) return;
@@ -375,7 +385,7 @@ function renderDetail(id) {
   const n = (r.ingredients || []).some(i => !i.section) ? computeNutrition(r) : null;
 
   const hero = h("div", { class: "d-hero" + (src ? "" : " noimg") },
-    src ? h("img", { src, alt: "" }) : h("span", { class: "initial", "aria-hidden": "true" }, (r.title || "?").trim().charAt(0).toUpperCase()),
+    src ? heroGallery(r) : h("span", { class: "initial", "aria-hidden": "true" }, (r.title || "?").trim().charAt(0).toUpperCase()),
     h("div", { class: "d-bar" },
       h("button", { class: "round", "aria-label": "Zurück", onclick: () => go("") }, icon("back")),
       h("div", null,
@@ -531,7 +541,7 @@ function foodFormFor(names) {
 }
 
 // ---------- form ----------
-function clearDraftPhoto() { if (state.draftPhoto && state.draftPhoto.previewUrl) URL.revokeObjectURL(state.draftPhoto.previewUrl); state.draftPhoto = null; }
+function clearDraftPhoto() { (state.draftPhotos || []).forEach(d => d.previewUrl && URL.revokeObjectURL(d.previewUrl)); state.draftPhotos = null; state.photoSel = 0; }
 function readIngs() {
   const out = [];
   document.querySelectorAll("#ing-boxes .ing-box").forEach(b => {
@@ -740,25 +750,52 @@ function renderForm(id) {
   const inp = (fid, val, extra) => h("input", Object.assign({ id: fid, value: val == null ? "" : val }, extra || {}));
   const dl = h("datalist", { id: "catlist" }, ["Frühstück","Vorspeise","Hauptgericht","Beilage","Suppe","Salat","Dessert","Kuchen & Gebäck","Brot","Getränk","Snack", ...categories()].filter((x, i, a) => a.indexOf(x) === i).map(c => h("option", { value: c })));
   const photoBox = h("div", { class: "photo-pick" });
-  const fileIn = h("input", { type: "file", id: "f-photo", accept: "image/*", hidden: true });
-  const usePhoto = (file, orig) => editPhoto(file).then(blob => { if (!blob) return; clearDraftPhoto(); state.draftPhoto = { blob, orig, previewUrl: URL.createObjectURL(blob) }; drawPhoto(); }).catch(() => toast("Das Bild konnte nicht gelesen werden."));
-  fileIn.addEventListener("change", () => { const file = fileIn.files && fileIn.files[0]; fileIn.value = ""; if (!file) return; usePhoto(file, file); });
+  const fileIn = h("input", { type: "file", id: "f-photo", accept: "image/*", multiple: true, hidden: true });
+  if (!state.draftPhotos) { state.draftPhotos = photoPaths(v).map(path => ({ path })); state.photoSel = 0; }
+  const P = () => state.draftPhotos;
+  const srcOf = d => d.previewUrl || urlFor(d.path);
+  let replaceAt = -1; // >= 0: ausgewähltes Foto ersetzen
+  const newItem = (blob, orig) => ({ blob, orig, previewUrl: URL.createObjectURL(blob) });
+  fileIn.addEventListener("change", async () => {
+    const files = [...(fileIn.files || [])]; fileIn.value = ""; if (!files.length) return;
+    try {
+      if (files.length === 1) {
+        const blob = await editPhoto(files[0]); if (!blob) return;
+        const it = newItem(blob, files[0]);
+        if (replaceAt >= 0 && P()[replaceAt]) { const old = P()[replaceAt]; old.previewUrl && URL.revokeObjectURL(old.previewUrl); P()[replaceAt] = it; state.photoSel = replaceAt; }
+        else { P().push(it); state.photoSel = P().length - 1; }
+      } else {
+        for (const f of files) P().push(newItem(await prepPhoto(f), f));
+        state.photoSel = P().length - 1;
+      }
+    } catch (e) { toast("Das Bild konnte nicht gelesen werden."); }
+    drawPhoto();
+  });
+  const pick = idx => { replaceAt = idx; fileIn.multiple = idx < 0; fileIn.click(); };
   const editCurrent = async () => {
-    const d = state.draftPhoto;
-    if (d && d.orig) return usePhoto(d.orig, d.orig);
-    try { const b = await (await fetch(photoSrc(v))).blob(); usePhoto(b, b); } catch (e) { toast("Das Foto konnte nicht geladen werden."); }
+    const i = state.photoSel, d = P()[i]; if (!d) return;
+    try {
+      const srcBlob = d.orig || await (await fetch(srcOf(d))).blob();
+      const blob = await editPhoto(srcBlob); if (!blob) return;
+      d.previewUrl && URL.revokeObjectURL(d.previewUrl);
+      P()[i] = newItem(blob, srcBlob); drawPhoto();
+    } catch (e) { toast("Das Foto konnte nicht geladen werden."); }
   };
   function drawPhoto() {
-    const d = state.draftPhoto;
-    const src = d ? (d.remove ? "" : d.previewUrl) : photoSrc(v);
+    const list = P(); if (state.photoSel >= list.length) state.photoSel = Math.max(0, list.length - 1);
+    const i = state.photoSel, d = list[i];
     photoBox.replaceChildren(
-      src
-        ? h("div", { class: "ph-img" }, h("img", { src, alt: "Foto" }),
+      d
+        ? h("div", { class: "ph-img" }, h("img", { src: srcOf(d), alt: "Foto" }),
+            i === 0 && list.length > 1 ? h("span", { class: "ph-badge" }, "Titelbild") : null,
             h("div", { class: "ph-acts" },
-              h("button", { type: "button", class: "ph-btn", onclick: () => fileIn.click() }, icon("camera"), "Ändern"),
+              i > 0 ? h("button", { type: "button", class: "ph-btn", onclick: () => { list.unshift(list.splice(i, 1)[0]); state.photoSel = 0; drawPhoto(); } }, "Als Titelbild") : null,
               h("button", { type: "button", class: "ph-btn", onclick: editCurrent }, icon("crop"), "Bearbeiten"),
-              h("button", { type: "button", class: "ph-btn", "aria-label": "Foto entfernen", onclick: () => { clearDraftPhoto(); state.draftPhoto = { remove: true }; drawPhoto(); } }, icon("trash"))))
-        : h("button", { type: "button", class: "ph-empty", onclick: () => fileIn.click() }, icon("camera"), h("span", null, "Foto hinzufügen")),
+              h("button", { type: "button", class: "ph-btn", "aria-label": "Foto entfernen", onclick: () => { const x = list.splice(i, 1)[0]; x.previewUrl && URL.revokeObjectURL(x.previewUrl); drawPhoto(); } }, icon("trash"))))
+        : h("button", { type: "button", class: "ph-empty", onclick: () => pick(-1) }, icon("camera"), h("span", null, "Fotos hinzufügen")),
+      list.length ? h("div", { class: "ph-strip" },
+        list.map((x, k) => h("button", { type: "button", class: "ph-th" + (k === i ? " on" : ""), "aria-label": "Foto " + (k + 1), onclick: () => { state.photoSel = k; drawPhoto(); } }, h("img", { src: srcOf(x), alt: "" }))),
+        h("button", { type: "button", class: "ph-th ph-add", "aria-label": "Fotos hinzufügen", onclick: () => pick(-1) }, "+")) : null,
       fileIn);
   }
   drawPhoto();
@@ -914,19 +951,21 @@ async function saveRecipe(existing, form) {
   };
   state.saving = true;
   const btn = form.querySelector('button[type="submit"]'); if (btn) { btn.disabled = true; btn.textContent = "Wird gespeichert …"; }
-  let oldPhoto = null;
+  let oldPhotos = [];
   try {
-    const d = state.draftPhoto;
-    if (d && d.blob) {
-      const path = state.user.id + "/" + uuid() + ".jpg";
-      const up = await sb.storage.from("photos").upload(path, d.blob, { contentType: "image/jpeg", upsert: false });
-      if (up.error) throw up.error;
-      data.photo_path = path;
-      if (existing && existing.photo_path) oldPhoto = existing.photo_path;
-    } else if (d && d.remove) {
-      data.photo_path = null;
-      if (existing && existing.photo_path) oldPhoto = existing.photo_path;
+    const list = state.draftPhotos || photoPaths(existing || {}).map(path => ({ path }));
+    const paths = [];
+    for (const d of list) {
+      if (d.blob) {
+        const path = state.user.id + "/" + uuid() + ".jpg";
+        const up = await sb.storage.from("photos").upload(path, d.blob, { contentType: "image/jpeg", upsert: false });
+        if (up.error) throw up.error;
+        d.path = path; d.blob = null; paths.push(path);
+      } else if (d.path) paths.push(d.path);
     }
+    data.photo_path = paths[0] || null;
+    data.photos = paths.slice(1);
+    oldPhotos = photoPaths(existing || {}).filter(x => !paths.includes(x));
     let id;
     if (existing) {
       const res = await sb.from("recipes").update(data).eq("id", existing.id).select("id").single();
@@ -935,7 +974,7 @@ async function saveRecipe(existing, form) {
       const res = await sb.from("recipes").insert(data).select("id").single();
       if (res.error) throw res.error; id = res.data.id;
     }
-    if (oldPhoto) sb.storage.from("photos").remove([oldPhoto]);
+    if (oldPhotos.length) sb.storage.from("photos").remove(oldPhotos);
     state.saving = false; clearDraftPhoto();
     toast("Gespeichert");
     await loadAll();
@@ -963,7 +1002,7 @@ async function toggleFav(r) {
 async function deleteRecipe(r) {
   const { error } = await sb.from("recipes").delete().eq("id", r.id);
   if (error) { toast("Löschen hat nicht geklappt."); return; }
-  if (r.photo_path) sb.storage.from("photos").remove([r.photo_path]);
+  if (photoPaths(r).length) sb.storage.from("photos").remove(photoPaths(r));
   state.recipes = state.recipes.filter(x => x.id !== r.id);
   lsSet(CACHE_KEY, { user: state.user.id, recipes: state.recipes, foods: state.foods });
   toast("„" + r.title + "“ gelöscht");
