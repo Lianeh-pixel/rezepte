@@ -210,7 +210,7 @@ async function refreshPhotoUrls() {
   lsSet(URL_KEY, state.photoUrls);
 }
 
-// ---------- Fotos aus Körbchen-PDFs übernehmen ----------
+// ---------- Fotos aus PDF-Exporten übernehmen ----------
 const titleKey = t => norm(String(t || "")).replace(/\.(pdf|jpe?g|png)$/i, "").replace(/\s*(\(\d+\)|\d+)\s*$/, "").replace(/[^a-z0-9äöüß]/g, "");
 function pdfTitle(bytes) {
   const txt = new TextDecoder("latin1").decode(bytes.subarray(0, Math.min(bytes.length, 4000000)));
@@ -402,7 +402,7 @@ function renderList() {
       menuOpen ? h("div", { class: "h-menu", role: "menu" },
         h("button", { role: "menuitemcheckbox", "aria-checked": state.favOnly ? "true" : "false", onclick: () => { state.favOnly = !state.favOnly; state.menuOpen = false; render(); } }, state.favOnly ? "Alle Rezepte zeigen" : "Nur Favoriten zeigen"),
         state.recipes.length ? h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; render(); exportPdf(state.recipes, "Rezeptbuch.pdf"); } }, "Alle als PDF") : null,
-        h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; render(); pickImportPhotos(); } }, "Fotos aus Körbchen übernehmen"),
+        h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; render(); pickImportPhotos(); } }, "Fotos aus anderer Quelle übernehmen"),
         h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; logout(); } }, "Abmelden")) : null)));
   if (state.loadError) app.append(h("div", { class: "notice" }, state.loadError));
   if (!state.loaded) { app.append(h("div", { class: "empty" }, h("h2", null, "Rezepte werden geladen …"))); return; }
