@@ -142,6 +142,9 @@ function perLabel(r) { const u = (r.servings_unit || "Portion").trim(), e = SERV
 function scaled(r) { const base = r.servings || 0, now = state.servings[r.id] || base; return base ? now / base : 1; }
 function fmtMin(m) { if (!m) return ""; return m >= 60 ? Math.floor(m / 60) + " Std." + (m % 60 ? " " + (m % 60) + " Min." : "") : m + " Min."; }
 function norm(s) { return (s || "").toLocaleLowerCase("de").normalize("NFD").replace(/[̀-ͯ]/g, ""); }
+// Standardbild je Kategorie
+const CAT_IMG = [[/kuchen|gebäck|gebaeck|kekse|plätzchen/, "kuchen"], [/brot|brötchen|buns/, "brot"], [/dessert|nachtisch|süß/, "dessert"], [/haupt/, "hauptgericht"], [/suppe|eintopf/, "suppen"], [/sauce|soße|dip/, "saucen"], [/beilage|salat/, "beilagen"], [/grund|basis|teig/, "grundrezepte"]];
+function catImage(c) { const k = String(c || "").toLowerCase(); const m = CAT_IMG.find(([re]) => re.test(k)); return m ? "icons/kat-" + m[1] + ".svg" : "icons/standard.svg"; }
 function photoSrc(r) { return r.photo_path ? (state.photoUrls[r.photo_path] || {}).url || "" : ""; }
 function heroGallery(r) {
   const urls = photoPaths(r).map(urlFor).filter(Boolean);
@@ -466,7 +469,7 @@ function renderDetail(id) {
   const n = (r.ingredients || []).some(i => !i.section) ? computeNutrition(r) : null;
 
   const hero = h("div", { class: "d-hero" + (src ? "" : " noimg") },
-    src ? heroGallery(r) : h("img", { src: "icons/standard.svg", alt: "", class: "std" }),
+    src ? heroGallery(r) : h("img", { src: catImage(r.category), alt: "", class: "std" }),
     h("div", { class: "d-bar" },
       h("button", { class: "round", "aria-label": "Zurück", onclick: () => go("") }, icon("back")),
       h("div", null,
@@ -516,7 +519,7 @@ function renderDetail(id) {
       h("section", { class: "d-col-steps" }, h("h3", { class: "d-colh" }, "Zubereitung"), body));
   }
 
-  app.append(h("div", { class: "d-blur", "aria-hidden": "true", style: "background-image:url('" + String(src || "icons/standard.svg").replace(/'/g, "%27") + "')" }));
+  app.append(h("div", { class: "d-blur", "aria-hidden": "true", style: "background-image:url('" + String(src || catImage(r.category)).replace(/'/g, "%27") + "')" }));
   app.append(hero, h("div", { class: "d-sheet" },
     h("div", { class: "grab", "aria-hidden": "true" }),
     r.category ? h("div", { class: "sec" }, r.category) : null,
