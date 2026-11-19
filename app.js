@@ -620,6 +620,44 @@ function readSteps() {
 function ingSectionNames() {
   return [...document.querySelectorAll("#ing-boxes .ing-box-name")].map(i => i.value.trim().replace(/:+$/, "")).filter(Boolean);
 }
+// Fenster: Zutatenlisten für einen Schritt auswählen oder neue anlegen
+function openLinkDialog(current, done) {
+  let sel = current.slice();
+  const close = () => { ov.remove(); document.removeEventListener("keydown", esc); };
+  const esc = e => { if (e.key === "Escape") close(); };
+  const list = h("div", { class: "dlg-list" });
+  const draw = () => {
+    const names = ingSectionNames();
+    sel.filter(n => !names.some(x => x.toLowerCase() === n.toLowerCase())).forEach(n => names.push(n));
+    list.replaceChildren(...(names.length ? names.map(n => {
+      const on = sel.some(x => x.toLowerCase() === n.toLowerCase());
+      return h("button", { type: "button", class: "dlg-opt" + (on ? " on" : ""), "aria-pressed": on ? "true" : "false", onclick: e => {
+        e.preventDefault(); sel = on ? sel.filter(x => x.toLowerCase() !== n.toLowerCase()) : sel.concat(n); draw();
+      } }, h("span", { class: "dlg-check", "aria-hidden": "true" }, on ? "✓" : ""), n);
+    }) : [h("p", { class: "dlg-empty" }, "Noch keine benannte Zutatenliste. Leg unten eine an.")]));
+  };
+  const newName = h("input", { type: "text", placeholder: "z. B. Streusel", "aria-label": "Name der neuen Zutatenliste" });
+  const create = e => {
+    e && e.preventDefault();
+    const n = newName.value.trim().replace(/[:|,]/g, ""); if (!n) { newName.focus(); return; }
+    if (!ingSectionNames().some(x => x.toLowerCase() === n.toLowerCase()) && ingEditor.addBox) ingEditor.addBox(n);
+    if (!sel.some(x => x.toLowerCase() === n.toLowerCase())) sel.push(n);
+    newName.value = ""; draw();
+  };
+  newName.addEventListener("keydown", e => { if (e.key === "Enter") create(e); });
+  const box = h("div", { class: "dlg", role: "dialog", "aria-modal": "true", "aria-label": "Zutatenliste verknüpfen" },
+    h("h3", null, "Zutatenliste verknüpfen"),
+    list,
+    h("div", { class: "dlg-new" }, h("span", null, "Neue Zutatenliste anlegen"),
+      h("div", { class: "link-new-row" }, newName, h("button", { type: "button", class: "btn", onclick: create }, "Anlegen"))),
+    h("div", { class: "dlg-btns" },
+      h("button", { type: "button", class: "btn", onclick: e => { e.preventDefault(); close(); } }, "Abbrechen"),
+      h("button", { type: "button", class: "btn primary", onclick: e => { e.preventDefault(); close(); done(sel); } }, "Fertig")));
+  const ov = h("div", { class: "dlg-ov", onclick: e => { if (e.target === ov) close(); } }, box);
+  draw();
+  document.body.append(ov);
+  document.addEventListener("keydown", esc);
+}
 function stepEditor(v) {
   const boxes = h("div", { class: "ing-boxes", id: "step-boxes" });
   const mark = () => boxes.classList.toggle("multi", boxes.children.length > 1);
@@ -627,27 +665,11 @@ function stepEditor(v) {
     const name = h("input", { type: "text", class: "ing-box-name", placeholder: "Überschrift, z. B. Belegen", "aria-label": "Überschrift des Schritts", value: g.title || "" });
     let links = (g.links || []).slice();
     const linkRow = h("div", { class: "link-row" });
-    const drawLinks = (menu) => {
+    const drawLinks = () => {
       el.dataset.links = JSON.stringify(links);
-      const avail = ingSectionNames().filter(n => !links.some(l => l.toLowerCase() === n.toLowerCase()));
-      const kids = links.map(l => h("span", { class: "link-chip" }, l,
-        h("button", { type: "button", "aria-label": "Verknüpfung entfernen", onclick: e => { e.preventDefault(); links = links.filter(x => x !== l); drawLinks(); } }, "×")));
-      if (!menu) kids.push(h("button", { type: "button", class: "ing-add", onclick: e => { e.preventDefault(); drawLinks(true); } }, "+ Zutaten hinzufügen"));
-      linkRow.replaceChildren(...kids);
-      if (menu) {
-        const newName = h("input", { type: "text", placeholder: "Name der neuen Liste", "aria-label": "Name der neuen Zutatenliste" });
-        const create = e => {
-          e && e.preventDefault();
-          const n = newName.value.trim().replace(/[:|,]/g, ""); if (!n) { newName.focus(); return; }
-          if (!ingSectionNames().some(x => x.toLowerCase() === n.toLowerCase()) && ingEditor.addBox) ingEditor.addBox(n);
-          links.push(n); drawLinks();
-        };
-        newName.addEventListener("keydown", e => { if (e.key === "Enter") create(e); });
-        linkRow.append(h("div", { class: "link-menu" },
-          avail.length ? h("div", { class: "link-pick" }, h("span", null, "Zutatenliste wählen"), avail.map(n => h("button", { type: "button", class: "btn", onclick: e => { e.preventDefault(); links.push(n); drawLinks(); } }, n))) : null,
-          h("div", { class: "link-new" }, h("span", null, "Oder neue Zutatenliste"), h("div", { class: "link-new-row" }, newName, h("button", { type: "button", class: "btn primary", onclick: create }, "Anlegen"))),
-          h("button", { type: "button", class: "ing-box-del", onclick: e => { e.preventDefault(); drawLinks(); } }, "Abbrechen")));
-      }
+      linkRow.replaceChildren(
+        h("button", { type: "button", class: "ing-add", onclick: e => { e.preventDefault(); openLinkDialog(links, nl => { links = nl; drawLinks(); }); } }, "Zutatenliste verknüpfen"),
+        links.length ? h("span", { class: "link-info" }, links.join(", ")) : null);
     };
     const ta = h("textarea", { rows: String(Math.max(5, g.items.length * 2 + 1)), placeholder: "Ofen auf 180 °C vorheizen.\n\nMehl und Eier verrühren.", "aria-label": "Schritte" }, g.items.join("\n\n"));
     const del = h("button", { type: "button", class: "ing-box-del", onclick: e => {
@@ -709,9 +731,9 @@ function renderForm(id) {
     dl,
     fld("Tags", inp("f-tags", (v.tags || []).join(", "), { placeholder: "vegetarisch, schnell, Weihnachten" }), "Mit Komma trennen."),
     fld("Zutaten", ingEditor(v.ingredients || []),
-      "Menge mit Einheit, z. B. 200 g oder 1 TL. Mit ≡ verschieben. Den Namen des Abschnitts kannst du leer lassen, wenn es nur einen gibt."),
+      "Menge mit Einheit, z. B. 200 g oder 1 TL. Mit ≡ verschieben. Den Listennamen kannst du leer lassen, wenn es nur eine Liste gibt."),
     fld("Zubereitung", stepEditor(v),
-      "Überschrift ist optional. Über „Zutaten hinzufügen“ verknüpfst du eine Zutatenliste, deren Zutaten dann beim Schritt und im Kochmodus stehen. Mit ≡ verschieben."),
+      "Überschrift ist optional. Über „Zutatenliste verknüpfen“ wählst du eine Zutatenliste, deren Zutaten dann beim Schritt und im Kochmodus stehen. Mit ≡ verschieben."),
     fld("Notizen", h("textarea", { id: "f-notes", rows: "3", placeholder: "Tipps, Varianten, was beim letzten Mal anders war" }, v.notes || "")),
     fld("Quelle", inp("f-src", v.source, { placeholder: "Webseite, Buch oder Person" })),
     state.formError ? h("p", { class: "err", role: "alert" }, state.formError) : null,

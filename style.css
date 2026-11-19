@@ -319,3 +319,37 @@ button { cursor: pointer; }
 .link-new-row { display: flex; gap: 6px; width: 100%; }
 .link-new-row input { flex: 1; min-width: 0; font: inherit; font-size: 16px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--fg); }
 .link-menu .ing-box-del { align-self: flex-start; padding-left: 0; }
+/* Fenster: Zutatenliste verknüpfen */
+.link-info { font-size: 14px; color: var(--muted); }
+.link-row .ing-add { padding-top: 4px; }
+.dlg-ov { position: fixed; inset: 0; z-index: 60; background: rgba(15, 26, 20, .45); display: flex; align-items: flex-end; justify-content: center; padding: 16px; padding-bottom: max(16px, env(safe-area-inset-bottom, 0px)); }
+@media (min-width: 600px) { .dlg-ov { align-items: center; } }
+.dlg { width: 100%; max-width: 420px; max-height: 85vh; overflow: auto; background: var(--bg); color: var(--fg); border-radius: 18px; padding: 18px; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 12px 40px rgba(0,0,0,.25); }
+.dlg h3 { margin: 0; font-size: 18px; }
+.dlg-list { display: flex; flex-direction: column; }
+.dlg-opt { display: flex; align-items: center; gap: 12px; font: inherit; font-size: 17px; text-align: left; color: var(--fg); background: none; border: 0; border-bottom: 1px solid var(--line); padding: 12px 2px; cursor: pointer; }
+.dlg-check { width: 24px; height: 24px; border-radius: 7px; border: 1.5px solid var(--line); display: grid; place-items: center; font-size: 15px; font-weight: 700; flex: none; }
+.dlg-opt.on .dlg-check { background: var(--basil); border-color: var(--basil); color: var(--basil-ink); }
+.dlg-empty { margin: 0; color: var(--muted); font-size: 15px; }
+.dlg-new { display: flex; flex-direction: column; gap: 6px; }
+.dlg-new > span { font-size: 13px; color: var(--muted); font-weight: 600; }
+.dlg-btns { display: flex; gap: 8px; justify-content: flex-end; }
+
+/* Bearbeiten: ruhige Listen ohne Kästen (wie Rezeptansicht) */
+.ing-boxes { gap: 0; }
+.ing-box { background: none; border: 0; border-radius: 0; padding: 18px 0 14px; gap: 6px; border-top: 1px solid var(--line); }
+.ing-box:first-child { border-top: 0; padding-top: 4px; }
+.ing-box.drag { background: var(--bg); }
+.ing-box-name { font-family: var(--font-display) !important; font-size: 21px !important; font-weight: 700; border: 0 !important; padding: 2px 0 !important; background: none !important; }
+.ing-box-name::placeholder { color: var(--muted); font-weight: 600; }
+.ing-row { background: none; grid-template-columns: 84px minmax(0, 1fr) 30px 26px; gap: 10px; padding: 0; }
+.ing-row input { border: 0 !important; border-radius: 6px; padding: 9px 0 !important; background: none !important; font-size: 17px; }
+.ing-row input:focus { background: var(--sunk) !important; padding-left: 6px !important; padding-right: 6px !important; }
+.ing-row .ing-q { text-align: left; }
+.ing-row .ing-n { font-weight: 400; }
+.ing-row.drag { background: var(--bg); }
+.ing-x { opacity: .55; }
+.ing-box textarea { border: 0 !important; background: none !important; padding: 4px 0 !important; font-size: 17px; line-height: 1.5; min-height: 0; resize: none; }
+.ing-box textarea:focus { background: var(--sunk) !important; padding: 6px 8px !important; border-radius: 8px; }
+.ing-box-del { font-size: 13px; }
+.ing-add { font-size: 15px; letter-spacing: .01em; }
