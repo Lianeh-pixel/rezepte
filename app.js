@@ -1165,7 +1165,6 @@ function drawCook() {
     h("div", { class: "cook-top" }, h("h2", null, c.r.title), h("button", { class: "btn", onclick: closeCook }, "Beenden")),
     h("div", { class: "cook-progress", "aria-hidden": "true" }, h("div", { style: "width:" + Math.round(pos / total * 100) + "%" })),
     h("div", { class: "cook-main" }, main),
-    h("div", { class: "wake" }, c.awake ? "Der Bildschirm bleibt an, solange der Kochmodus offen ist." : "Tipp: Wischen oder Pfeiltasten blättern weiter."),
     h("div", { class: "cook-nav" },
       h("button", { class: "btn", disabled: c.step < 0, onclick: () => { c.step--; drawCook(); } }, "← Zurück"),
       c.step < steps.length - 1
