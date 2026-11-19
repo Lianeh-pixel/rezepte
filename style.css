@@ -530,16 +530,21 @@ a.rlink::after { content: " ›"; text-decoration: none; display: inline-block; 
 /* ===== Timer ===== */
 .cook-side { display: flex; flex-direction: column; gap: 16px; margin-top: 22px; }
 .cook-side .cook-step-ings { margin: 0; }
-.tmr-card { display: flex; flex-direction: column; gap: 14px; padding: 18px 20px; border-radius: 20px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); }
-.tmr-go { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 60px; width: 100%; border-radius: 16px; border: 0; background: var(--btn); color: var(--basil-ink); font: inherit; font-size: 19px; font-weight: 700; cursor: pointer; }
-.tmr-go .ic { width: 24px; height: 24px; }
-.tmr-go.run { background: transparent; border: 1.5px solid var(--basil); color: var(--fg); justify-content: space-between; padding: 0 10px 0 20px; }
-.tmr-left { font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.tmr-go .tmr-stop { font-size: 15px; font-weight: 600; padding: 8px 14px; border-radius: 999px; background: var(--sunk); color: var(--fg); }
-.tmr-go.done { animation: tmrPulse 1s ease-in-out infinite; }
-.tmr-info { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 17px; }
-.tmr-info li { display: flex; align-items: center; gap: 10px; }
-.tmr-info .ic { width: 20px; height: 20px; color: var(--basil); }
+.tmr-card { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 8px 0; }
+.tmr-round { position: relative; width: 140px; height: 140px; border-radius: 999px; border: 0; display: grid; place-items: center; background: var(--btn); color: var(--basil-ink); font: inherit; cursor: pointer; box-shadow: 0 10px 30px rgba(0,0,0,.18); }
+.tmr-round > .ic { width: 60px; height: 60px; stroke-width: 1.8; }
+.tmr-round.run { background: transparent; box-shadow: none; cursor: default; }
+.tmr-ring { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
+.tmr-ring circle { fill: none; stroke-width: 8; }
+.tmr-ring .bg { stroke: var(--line); }
+.tmr-ring .fg { stroke: var(--basil); stroke-linecap: round; transition: stroke-dashoffset .5s linear; }
+.tmr-left { position: relative; font-size: 32px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--basil); }
+.tmr-round.done { animation: tmrPulse 1s ease-in-out infinite; }
+.tmr-round.done .tmr-left { color: var(--basil-ink); font-size: 26px; }
+.tmr-info { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 18px; font-size: 16px; color: var(--muted); }
+.tmr-info li { display: inline-flex; align-items: center; gap: 6px; }
+.tmr-info .ic { width: 18px; height: 18px; color: var(--basil); }
+.tmr-card .tmr-stop { margin: 0; min-height: 36px; padding: 0 18px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--fg); font: inherit; font-size: 15px; cursor: pointer; }
 .tmr-bar { position: fixed; z-index: 60; left: 50%; transform: translateX(-50%); top: calc(10px + env(safe-area-inset-top, 0px)); display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; max-width: calc(100vw - 32px); pointer-events: none; }
 .tmr-bar.in-cook { top: calc(14px + env(safe-area-inset-top, 0px)); }
 @media (max-width: 700px) { .tmr-bar.in-cook { top: calc(84px + env(safe-area-inset-top, 0px)); } }
@@ -576,11 +581,13 @@ a.rlink::after { content: " ›"; text-decoration: none; display: inline-block; 
   .cook-main .cook-step-ings::before { font-size: 11px; margin-bottom: 4px; }
   .cook-main .cook-step-ings .si { padding: 2px 0; }
   .cook-side { gap: 10px; }
-  .tmr-card { padding: 10px 14px; gap: 8px; border-radius: 16px; }
-  .tmr-go { min-height: 44px; font-size: 16px; }
+  .tmr-card { gap: 8px; padding: 0; }
+  .tmr-round { width: 96px; height: 96px; }
+  .tmr-round > .ic { width: 42px; height: 42px; }
   .tmr-left { font-size: 22px; }
-  .tmr-info { flex-direction: row; flex-wrap: wrap; gap: 4px 14px; font-size: 14px; }
+  .tmr-info { font-size: 14px; gap: 4px 12px; }
   .tmr-info .ic { width: 16px; height: 16px; }
+  .tmr-card .tmr-stop { min-height: 30px; font-size: 13px; }
   .cook-nav .btn { min-height: 46px; font-size: 17px; }
   .cook-ings { font-size: 17px; columns: 3 200px; }
   .tmr-bar.in-cook { top: calc(8px + env(safe-area-inset-top, 0px)); }
