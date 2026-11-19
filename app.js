@@ -58,6 +58,9 @@ function toast(msg, ms) {
   t.textContent = msg; t.hidden = false;
   clearTimeout(toast._t); toast._t = setTimeout(() => { t.hidden = true; }, ms || 2600);
 }
+const GUEST_FAV = "rb-gast-fav";
+const isGuest = () => !state.user;
+function guestFavs() { return new Set(lsGet(GUEST_FAV, [])); }
 function lsGet(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }
 function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
 function parseQty(s) {
@@ -170,7 +173,6 @@ function errText(e) { return (e && (e.message || e.code)) || "unbekannter Fehler
 
 // ---------- data ----------
 async function loadAll() {
-  if (!state.user) return;
   const [rec, foods] = await Promise.all([
     sb.from("recipes").select("*").order("updated_at", { ascending: false }),
     sb.from("foods").select("*").order("name")
@@ -180,11 +182,13 @@ async function loadAll() {
     render(); return;
   }
   state.recipes = rec.data; state.loaded = true; state.loadError = "";
+  if (isGuest()) { const fav = guestFavs(); state.recipes.forEach(r => r.favorite = fav.has(r.id)); }
   if (!foods.error) state.foods = foods.data;
-  lsSet(CACHE_KEY, { user: state.user.id, recipes: state.recipes, foods: state.foods });
+  saveCache();
   await refreshPhotoUrls();
   rerenderKeepingForm();
 }
+function saveCache() { lsSet(CACHE_KEY, { user: state.user ? state.user.id : "gast", recipes: state.recipes, foods: state.foods }); }
 function rerenderKeepingForm() {
   if (state.route.view === "edit") return;
   if (state.route.view === "list" && document.activeElement && document.activeElement.id === "q") { renderGridOnly(); return; }
@@ -270,18 +274,17 @@ async function initAuth() {
   sb.auth.onAuthStateChange((_ev, session) => {
     const before = state.user && state.user.id;
     setUser(session ? session.user : null);
-    if ((state.user && state.user.id) !== before) { if (state.user) loadAll(); render(); }
+    if ((state.user && state.user.id) !== before) { state.photoUrls = {}; loadAll(); if (state.user && state.route.view === "login") go(""); else render(); }
   });
   state.authReady = true;
   render();
-  if (state.user) loadAll();
+  loadAll();
 }
 function setUser(u) {
   state.user = u;
-  if (u) {
-    const c = lsGet(CACHE_KEY, null);
-    if (c && c.user === u.id && !state.loaded) { state.recipes = c.recipes || []; state.foods = c.foods || []; state.loaded = true; }
-  } else { state.recipes = []; state.foods = []; state.loaded = false; }
+  const c = lsGet(CACHE_KEY, null);
+  if (c && c.user === (u ? u.id : "gast")) { if (!state.loaded) { state.recipes = c.recipes || []; state.foods = c.foods || []; state.loaded = true; } }
+  else { state.recipes = []; state.foods = []; state.loaded = false; }
 }
 function renderLogin() {
   const signup = state.authMode === "signup";
@@ -293,8 +296,6 @@ function renderLogin() {
     state.authErr ? h("p", { class: "err", role: "alert" }, state.authErr) : null,
     state.authMsg ? h("p", { class: "ok" }, state.authMsg) : null,
     h("button", { type: "submit", class: "btn primary", disabled: state.authBusy }, state.authBusy ? "Einen Moment …" : signup ? "Konto anlegen" : "Anmelden"),
-    h("button", { type: "button", class: "switch", onclick: () => { state.authMode = signup ? "login" : "signup"; state.authErr = ""; state.authMsg = ""; render(); } },
-      signup ? "Ich habe schon ein Konto" : "Noch kein Konto? Einmalig anlegen"),
     !signup ? h("button", { type: "button", class: "switch", onclick: () => resetPw(email.value) }, "Passwort vergessen") : null);
   form.addEventListener("submit", async e => {
     e.preventDefault();
@@ -317,8 +318,9 @@ function renderLogin() {
   });
   app.append(h("div", { class: "login" },
     h("h1", null, "Rezeptbuch"),
-    h("p", null, signup ? "Leg einmalig dein Konto an. Danach meldest du dich auf jedem Gerät mit denselben Daten an." : "Melde dich an, um deine Rezepte zu sehen."),
-    form));
+    h("p", null, "Zum Bearbeiten anmelden. Lesen geht auch ohne Anmeldung."),
+    form,
+    h("button", { type: "button", class: "switch", onclick: () => go("") }, "Zurück zu den Rezepten")));
 }
 async function resetPw(email) {
   if (!email) { state.authErr = "Gib zuerst deine E-Mail ein."; render(); return; }
@@ -348,6 +350,7 @@ function readHash() {
   const hsh = location.hash.slice(1);
   if (hsh === "neu") return { view: "edit", id: null };
   if (hsh === "neues-passwort") return { view: "newpw" };
+  if (hsh === "anmelden") return { view: "login" };
   let m = hsh.match(/^rezept-([A-Za-z0-9-]+)$/); if (m) return { view: "detail", id: m[1] };
   m = hsh.match(/^bearbeiten-([A-Za-z0-9-]+)$/); if (m) return { view: "edit", id: m[1] };
   return { view: "list" };
@@ -371,8 +374,9 @@ function render() {
   app.classList.remove("full", "home");
   if (!state.authReady) { app.append(h("div", { class: "empty" }, h("h2", null, "Wird geladen …"))); return; }
   if (state.route.view === "newpw" && state.user) return renderNewPassword();
-  if (!state.user) return renderLogin();
+  if (state.route.view === "login") { if (state.user) { go(""); return; } return renderLogin(); }
   const r = state.route;
+  if (r.view === "edit" && isGuest()) { go(""); return; }
   if (r.view === "detail") return renderDetail(r.id);
   if (r.view === "edit") return renderForm(r.id);
   renderList();
@@ -390,16 +394,18 @@ function renderList() {
         h("img", { class: "logo-l", src: "icons/icon.svg", alt: "", width: "36", height: "36" }), h("img", { class: "logo-d", src: "icons/icon-dark.svg", alt: "", width: "36", height: "36" })),
       menuOpen ? h("div", { class: "h-menu", role: "menu" },
         h("button", { role: "menuitemcheckbox", "aria-checked": state.favOnly ? "true" : "false", onclick: () => { state.favOnly = !state.favOnly; state.menuOpen = false; render(); } }, state.favOnly ? "Alle Rezepte zeigen" : "Nur Favoriten zeigen"),
-        state.recipes.length ? h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; render(); exportPdf(state.recipes, "Rezeptbuch.pdf"); } }, "Alle als PDF") : null,
-        h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; render(); pickImportPhotos(); } }, "Fotos aus anderer Quelle übernehmen"),
-        h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; logout(); } }, "Abmelden")) : null)));
+        state.recipes.length ? h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; render(); exportPdf(state.recipes, "Rezeptbuch.pdf"); } }, "Alle in einer PDF") : null,
+        state.recipes.length ? h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; render(); exportPdfEach(sortedForPdf()); } }, "Alle als einzelne PDFs") : null,
+        isGuest() ? null : h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; render(); pickImportPhotos(); } }, "Fotos aus anderer Quelle übernehmen"),
+        isGuest() ? h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; go("anmelden"); } }, "Anmelden")
+          : h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; logout(); } }, "Abmelden")) : null)));
   if (state.loadError) app.append(h("div", { class: "notice" }, state.loadError));
   if (!state.loaded) { app.append(h("div", { class: "empty" }, h("h2", null, "Rezepte werden geladen …"))); return; }
   if (!state.recipes.length) {
     app.append(h("div", { class: "empty" },
       h("h2", null, "Noch keine Rezepte"),
       h("p", null, "Leg dein erstes Rezept an. Es erscheint dann auf all deinen Geräten."),
-      h("button", { class: "btn primary", onclick: () => go("neu") }, "+ Erstes Rezept anlegen")));
+      isGuest() ? null : h("button", { class: "btn primary", onclick: () => go("neu") }, "+ Erstes Rezept anlegen")));
     return;
   }
   const input = h("input", { id: "q", type: "search", placeholder: "Suchen", value: state.query, autocomplete: "off", "aria-label": "Rezepte durchsuchen" });
@@ -408,7 +414,7 @@ function renderList() {
   if (state.favOnly) app.append(h("div", { class: "h-filter" }, "Nur Favoriten", h("button", { onclick: () => { state.favOnly = false; render(); } }, "Alle zeigen")));
   app.append(h("div", { id: "gridhost" }));
   renderGridOnly();
-  app.append(h("button", { class: "fab", "aria-label": "Neues Rezept", onclick: () => go("neu"), disabled: !state.online }, "+"));
+  if (!isGuest()) app.append(h("button", { class: "fab", "aria-label": "Neues Rezept", onclick: () => go("neu"), disabled: !state.online }, "+"));
   if (state._keepSearchFocus != null) { input.focus(); try { input.setSelectionRange(state._keepSearchFocus, state._keepSearchFocus); } catch (e) {} state._keepSearchFocus = null; }
 }
 function renderGridOnly() {
@@ -485,7 +491,7 @@ function renderDetail(id) {
         src ? h("button", { class: "round ph-open", "aria-label": nPh > 1 ? nPh + " Fotos ansehen" : "Foto ansehen", onclick: () => openPhotos(r) }, icon("image"), nPh > 1 ? h("span", { class: "ph-n" }, String(nPh)) : null) : null,
         h("button", { class: "round" + (r.favorite ? " fav-on" : ""), "aria-label": r.favorite ? "Favorit entfernen" : "Als Favorit merken", "aria-pressed": r.favorite ? "true" : "false", onclick: () => toggleFav(r) }, icon("heart", r.favorite)),
         h("button", { class: "round", "aria-label": "Als PDF teilen", onclick: () => exportPdf([r], safeName(r.title) + ".pdf") }, icon("share")),
-        h("button", { class: "round", "aria-label": "Bearbeiten", onclick: () => go("bearbeiten-" + r.id), disabled: !state.online }, icon("pen")))));
+        isGuest() ? null : h("button", { class: "round", "aria-label": "Bearbeiten", onclick: () => go("bearbeiten-" + r.id), disabled: !state.online }, icon("pen")))));
 
   const meta = h("div", { class: "d-meta" },
     r.servings ? h("span", null, icon("people"), servLabel(r, r.servings)) : null,
@@ -621,7 +627,7 @@ function nutritionBlock(r) {
       [item("Fett", "fat"), item("Kohlenhydrate", "carbs"), item("davon Zucker", "sugar", true),
       item("Eiweiß", "protein"), item("Ballaststoffe", "fiber"), item("Salz", "salt")].flatMap(x => [x, " "])),
     h("small", null, "Schätzwerte" + (missNames.length ? " · nicht mitgerechnet: " + missNames.join(", ") : "")),
-    n.missing.some(x => !x.food) && state.online ? foodFormFor(n.missing.filter(x => !x.food).map(x => x.i.name)) : null);
+    n.missing.some(x => !x.food) && state.online && !isGuest() ? foodFormFor(n.missing.filter(x => !x.food).map(x => x.i.name)) : null);
 }
 function foodFormFor(names) {
   const ff = state.foodForm;
@@ -745,6 +751,8 @@ function readSteps() {
     const links = JSON.parse(b.dataset.links || "[]");
     const items = splitSteps(b.querySelector("textarea").value).map(s => s.replace(/^#+\s+/, ""));
     if (!items.length) return;
+    const tm = b.dataset.timer ? JSON.parse(b.dataset.timer) : null;
+    if (tm) { const i = Math.min(tm.idx, items.length - 1); items[i] = items[i] + " " + tm.tok; }
     if (t || links.length || out.length) out.push("# " + t + " | " + links.join(", "));
     out.push(...items);
   });
@@ -863,24 +871,30 @@ function stepEditor(v) {
   const box = (g, focus) => {
     const name = h("input", { type: "text", class: "ing-box-name", placeholder: "Überschrift, z. B. Belegen", "aria-label": "Überschrift des Schritts", value: g.title || "" });
     let links = (g.links || []).slice();
+    // Timer-Eintrag {Timer …} nicht im Text zeigen, sondern getrennt merken (mit Absatz-Nummer)
+    let timer = null;
+    const items = g.items.map((it, i) => it.replace(/[ \t]*\{\s*Timer:?[^}]*\}/gi, m => { if (!timer) timer = { tok: m.trim(), idx: i }; return ""; }).trim());
     const linkRow = h("div", { class: "link-row" });
     // je Abschnitt entweder Zutatenliste verknüpfen oder Timer
     const drawLinks = () => {
       el.dataset.links = JSON.stringify(links);
-      const hasT = /\{\s*Timer/i.test(ta.value);
+      el.dataset.timer = timer ? JSON.stringify(timer) : "";
+      const hasT = !!timer;
       linkRow.replaceChildren(...[
         hasT ? null : h("button", { type: "button", class: "ing-add", onclick: e => { e.preventDefault(); openLinkDialog(links, nl => { links = nl; drawLinks(); }); } }, "Zutatenliste verknüpfen"),
         links.length ? h("span", { class: "link-info" }, links.join(", ")) : null,
+        hasT ? h("span", { class: "link-info tmr-info-ed" }, icon("timer"), timerLabel(timer.tok)) : null,
         links.length ? null : hasT
-          ? h("button", { type: "button", class: "ing-add rl-add", onclick: e => { e.preventDefault(); ta.value = ta.value.replace(/[ \t]*\{\s*Timer[^}]*\}/gi, ""); drawLinks(); } }, icon("timer"), "Timer entfernen")
-          : h("button", { type: "button", class: "ing-add rl-add", onclick: e => { e.preventDefault(); openTimerDialog(t => { insertTok(ta, "{Timer " + [fmtDur(t.sec), t.dev, t.temp].join(" | ").replace(/( \| )+$/, "") + "}"); drawLinks(); }); } }, icon("timer"), "Timer"),
+          ? h("button", { type: "button", class: "ing-add rl-add", onclick: e => { e.preventDefault(); timer = null; drawLinks(); } }, icon("timer"), "Timer entfernen")
+          : h("button", { type: "button", class: "ing-add rl-add", onclick: e => { e.preventDefault(); openTimerDialog(t => { const tok = "{Timer " + [fmtDur(t.sec), t.dev, t.temp].join(" | ").replace(/( \| )+$/, "") + "}";
+            const at = ta.dataset.sel != null ? +ta.dataset.sel : ta.value.length;
+            timer = { tok, idx: Math.max(0, splitSteps(ta.value.slice(0, at)).length - 1) }; drawLinks(); }); } }, icon("timer"), "Timer"),
         h("button", { type: "button", class: "ing-add rl-add", onclick: e => { e.preventDefault(); openRecipeDialog(null, rr => { if (!rr) return;
           insertTok(ta, "[[" + rr.title + "]]"); }, true); } }, icon("link"), "Rezept verlinken")].filter(Boolean));
     };
-    const ta = h("textarea", { rows: String(Math.max(5, g.items.length * 2 + 1)), placeholder: "Ofen auf 180 °C vorheizen.\n\nMehl und Eier verrühren.", "aria-label": "Schritte" }, g.items.join("\n\n"));
+    const ta = h("textarea", { rows: String(Math.max(5, g.items.length * 2 + 1)), placeholder: "Ofen auf 180 °C vorheizen.\n\nMehl und Eier verrühren.", "aria-label": "Schritte" }, items.join("\n\n"));
     const keepSel = () => { ta.dataset.sel = ta.selectionStart; ta.dataset.selEnd = ta.selectionEnd; };
     ["keyup", "mouseup", "input", "blur"].forEach(ev => ta.addEventListener(ev, keepSel));
-    let hadT = /\{\s*Timer/i.test(ta.value); ta.addEventListener("input", () => { const t = /\{\s*Timer/i.test(ta.value); if (t !== hadT) { hadT = t; drawLinks(); } });
     const del = h("button", { type: "button", class: "ing-box-del", onclick: e => {
       e.preventDefault();
       if (ta.value.trim() && del.dataset.sure !== "1") { del.dataset.sure = "1"; del.textContent = "Wirklich entfernen?"; return; }
@@ -1183,16 +1197,17 @@ function showFormError(form) {
 }
 async function toggleFav(r) {
   r.favorite = !r.favorite; render();
+  if (isGuest()) { const f = guestFavs(); r.favorite ? f.add(r.id) : f.delete(r.id); lsSet(GUEST_FAV, [...f]); saveCache(); return; }
   const { error } = await sb.from("recipes").update({ favorite: r.favorite }).eq("id", r.id);
   if (error) { r.favorite = !r.favorite; render(); toast("Favorit konnte nicht gespeichert werden."); }
-  else lsSet(CACHE_KEY, { user: state.user.id, recipes: state.recipes, foods: state.foods });
+  else saveCache();
 }
 async function deleteRecipe(r) {
   const { error } = await sb.from("recipes").delete().eq("id", r.id);
   if (error) { toast("Löschen hat nicht geklappt."); return; }
   if (photoPaths(r).length) sb.storage.from("photos").remove(photoPaths(r));
   state.recipes = state.recipes.filter(x => x.id !== r.id);
-  lsSet(CACHE_KEY, { user: state.user.id, recipes: state.recipes, foods: state.foods });
+  saveCache();
   toast("„" + r.title + "“ gelöscht");
   go("");
 }
@@ -1200,6 +1215,7 @@ async function logout() { await sb.auth.signOut(); try { localStorage.removeItem
 
 
 // ---------- Timer ----------
+function timerLabel(tok) { const t = stepTimers(tok)[0]; return t ? [fmtDur(t.sec), t.dev, t.temp].filter(Boolean).join(" · ") : ""; }
 // Dauer aus einem Timer-Eintrag {Timer 45 Min.} lesen: "45 Min.", "1 Std. 30 Min.", "90" (= Minuten)
 const TIME_RE = /(\d+(?:[,.]\d+)?)\s*(Minuten|Minute|Min\.?|Stunden|Stunde|Std\.?|Sekunden|Sek\.?)/gi;
 function parseDur(str) {
@@ -1275,7 +1291,7 @@ function releaseWake() { try { state.wakeLock && state.wakeLock.release(); } cat
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState !== "visible") return;
   if (state.cook) requestWake().then(ok => { if (state.cook) { state.cook.awake = ok; drawCook(); } });
-  if (state.user && state.online) loadAll();
+  if (state.online) loadAll();
 });
 function openCook(r) {
   state.cook = { r, step: -1, awake: false, f: scaled(r) };
@@ -1380,9 +1396,7 @@ async function imgData(src, aspect) {
     return { data: c.toDataURL("image/jpeg", 0.88), w: c.width, h: c.height };
   } catch (e) { return null; }
 }
-async function exportPdf(recipes, filename) {
-  if (!window.jspdf) { toast("PDF-Export lädt noch. Bitte gleich noch einmal tippen."); return; }
-  toast("PDF wird erstellt …");
+async function buildPdf(recipes) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const PW = 210, PH = 297, M = 20, CW = PW - 2 * M, BOTTOM = PH - 22;
@@ -1543,16 +1557,65 @@ async function exportPdf(recipes, filename) {
     doc.setDrawColor(...RULE); doc.setLineWidth(0.25); doc.line(PW / 2 - 10, PH - 14, PW / 2 + 10, PH - 14);
     font("times", "italic", 9, GREY); doc.text(pages > 1 ? String(p) : "Rezeptbuch", PW / 2, PH - 9.5, { align: "center" });
   }
-  const blob = doc.output("blob");
-  const file = new File([blob], filename, { type: "application/pdf" });
-  // Auf iPad/iPhone öffnet das Teilen-Menü (Sichern in Dateien, Drucken, AirDrop); sonst normaler Download
-  if (navigator.canShare && navigator.canShare({ files: [file] }) && /iPad|iPhone|Android/i.test(navigator.userAgent)) {
-    try { await navigator.share({ files: [file], title: filename }); return; } catch (e) { if (e && e.name === "AbortError") return; }
-  }
+  return doc.output("blob");
+}
+const isMobile = () => /iPad|iPhone|Android/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+function download(blob, filename) {
   const a = h("a", { href: URL.createObjectURL(blob), download: filename });
   document.body.append(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+}
+async function exportPdf(recipes, filename) {
+  if (!window.jspdf) { toast("PDF-Export lädt noch. Bitte gleich noch einmal tippen."); return; }
+  toast("PDF wird erstellt …");
+  const blob = await buildPdf(recipes);
+  const file = new File([blob], filename, { type: "application/pdf" });
+  // Auf iPad/iPhone öffnet das Teilen-Menü (Sichern in Dateien, Drucken, AirDrop); sonst normaler Download
+  if (navigator.canShare && navigator.canShare({ files: [file] }) && isMobile()) {
+    try { await navigator.share({ files: [file], title: filename }); return; } catch (e) { if (e && e.name === "AbortError") return; }
+  }
+  download(blob, filename);
   toast("PDF gespeichert");
+}
+// Jedes Rezept als eigene PDF, zusammen in einer ZIP-Datei (am Tablet/Handy direkt über Teilen)
+function sortedForPdf() { return state.recipes.slice().sort((a, b) => { const ca = a.category || "~", cb = b.category || "~"; return ca.localeCompare(cb, "de") || (a.title || "").localeCompare(b.title || "", "de"); }); }
+async function exportPdfEach(recipes) {
+  if (!window.jspdf) { toast("PDF-Export lädt noch. Bitte gleich noch einmal tippen."); return; }
+  const files = [], used = new Set();
+  for (let i = 0; i < recipes.length; i++) {
+    toast("PDF " + (i + 1) + " von " + recipes.length + " …", 60000);
+    let name = safeName(recipes[i].title || "Rezept"), n = 2;
+    while (used.has(name.toLowerCase())) name = safeName(recipes[i].title || "Rezept") + " " + n++;
+    used.add(name.toLowerCase());
+    files.push(new File([await buildPdf([recipes[i]])], name + ".pdf", { type: "application/pdf" }));
+    await new Promise(r => setTimeout(r, 0));
+  }
+  if (navigator.canShare && navigator.canShare({ files }) && isMobile()) {
+    toast("Fertig: " + files.length + " PDFs", 2500);
+    try { await navigator.share({ files, title: "Rezeptbuch" }); return; } catch (e) { if (e && e.name === "AbortError") return; }
+  }
+  download(await makeZip(files), "Rezeptbuch PDFs.zip");
+  toast(files.length + " PDFs gespeichert (ZIP-Datei)");
+}
+// einfache ZIP-Datei ohne Kompression
+const CRC_T = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(b) { let c = 0xFFFFFFFF; for (let i = 0; i < b.length; i++) c = CRC_T[(c ^ b[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+async function makeZip(files) {
+  const enc = new TextEncoder(), parts = [], central = []; let off = 0;
+  const d = new Date(), dt = ((d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1)), dd = (((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate());
+  for (const f of files) {
+    const data = new Uint8Array(await f.arrayBuffer()), name = enc.encode(f.name), crc = crc32(data);
+    const lh = new DataView(new ArrayBuffer(30));
+    [[0, 0x04034b50, 4], [4, 20, 2], [6, 0x0800, 2], [8, 0, 2], [10, dt, 2], [12, dd, 2], [14, crc, 4], [18, data.length, 4], [22, data.length, 4], [26, name.length, 2], [28, 0, 2]]
+      .forEach(([o, v, l]) => l === 4 ? lh.setUint32(o, v, true) : lh.setUint16(o, v, true));
+    const ch = new DataView(new ArrayBuffer(46));
+    [[0, 0x02014b50, 4], [4, 20, 2], [6, 20, 2], [8, 0x0800, 2], [10, 0, 2], [12, dt, 2], [14, dd, 2], [16, crc, 4], [20, data.length, 4], [24, data.length, 4], [28, name.length, 2], [30, 0, 2], [32, 0, 2], [34, 0, 2], [36, 0, 2], [38, 0, 4], [42, off, 4]]
+      .forEach(([o, v, l]) => l === 4 ? ch.setUint32(o, v, true) : ch.setUint16(o, v, true));
+    parts.push(lh, name, data); central.push(ch, name); off += 30 + name.length + data.length;
+  }
+  const size = central.reduce((a, x) => a + x.byteLength, 0), end = new DataView(new ArrayBuffer(22));
+  [[0, 0x06054b50, 4], [8, files.length, 2], [10, files.length, 2], [12, size, 4], [16, off, 4]].forEach(([o, v, l]) => l === 4 ? end.setUint32(o, v, true) : end.setUint16(o, v, true));
+  return new Blob([...parts, ...central, end], { type: "application/zip" });
 }
 
 // ---------- boot ----------
