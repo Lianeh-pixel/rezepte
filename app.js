@@ -104,6 +104,18 @@ function consolidate(list) {
   });
   return out;
 }
+// Gerichte aus Basics: verlinkte Rezepte als Zutat. Faktor des Basics aus Menge + Einheit
+function basicFactor(i, rr) {
+  const u = norm(String(i.unit || "").trim()), q = i.qty != null ? i.qty : 1;
+  if (!u || /^rezept/.test(u)) return q;
+  const su = SERV_UNITS.find(x => norm(x[0]) === u || norm(x[1]) === u);
+  if (rr.servings && (su || u === "portion" || u === "portionen") ) return q / rr.servings;
+  return 1;
+}
+function basicsOf(r) {
+  const seen = new Set();
+  return consolidate(r.ingredients || []).map(i => ({ i, rr: i.ref && i.ref !== r.id ? findRecipe(i.ref) : null })).filter(x => x.rr && !seen.has(x.rr.id) && seen.add(x.rr.id));
+}
 function ingToLine(i) { return i.section ? i.section + ":" : [fmtQty(i.qty), i.unit, i.name].filter(Boolean).join(" "); }
 // Zutaten, die in einem Zubereitungsschritt vorkommen (automatisch per Name erkannt)
 function normWord(w) { return w.toLowerCase().replace(/ä/g, "a").replace(/ö/g, "o").replace(/ü/g, "u").replace(/ß/g, "ss").replace(/(en|n|e|s)$/, ""); }
@@ -532,10 +544,25 @@ function renderDetail(id) {
       h("button", { "aria-label": "Mehr Portionen", onclick: () => { state.servings[r.id] = now + 1; render(); } }, "+")) : null;
     // eine zusammengerechnete Liste: gleiche Zutat mit gleicher Einheit wird addiert
     const all = consolidate(r.ingredients || []);
-    const groups = all.length ? [{ title: "", items: all }] : [];
+    const bas = basicsOf(r), basIds = new Set(bas.map(x => x.rr.id));
+    const rest = bas.length ? all.filter(i => !(i.ref && basIds.has(i.ref))) : all;
+    const groups = rest.length ? [{ title: bas.length ? "Außerdem" : "", items: rest }] : [];
+    state.openBas = state.openBas || {};
+    const basBlock = bas.length ? h("div", { class: "d-bas" }, h("div", { class: "sec" }, "Basics"), bas.map(({ i, rr }) => {
+      const key = r.id + ":" + rr.id, open = !!state.openBas[key], bf = f * basicFactor(i, rr);
+      const q = [fmtQty(i.qty != null ? i.qty * f : null), i.unit].filter(Boolean).join(" ");
+      return h("div", { class: "bas" + (open ? " open" : "") },
+        h("button", { class: "bas-h", "aria-expanded": open ? "true" : "false", onclick: () => { state.openBas[key] = !open; render(); } },
+          icon("link"), h("span", { class: "bas-n" }, i.name || rr.title), h("span", { class: "bas-q" }, q), h("span", { class: "bas-c", "aria-hidden": "true" }, "›")),
+        open ? h("div", { class: "bas-sub" },
+          h("ul", { class: "d-ing" }, consolidate(rr.ingredients || []).map(x => h("li", null,
+            h("span", { class: "qty" }, [fmtQty(x.qty != null ? x.qty * bf : null), x.unit].filter(Boolean).join(" ")), ingName(x)))),
+          h("a", { class: "bas-go", href: "#rezept-" + rr.id, onclick: e => { e.preventDefault(); openRecipe(rr.id); } }, "Rezept öffnen ›")) : null);
+    })) : null;
     body = h("div", null,
-      h("div", { class: "d-row" }, h("span", { class: "sec" }, groups[0] && groups[0].title ? groups[0].title : ""), serv),
-      groups.length ? groups.map((g, gi) => [gi > 0 ? h("div", { class: "sec d-sec" }, g.title) : null,
+      h("div", { class: "d-row" }, h("span", { class: "sec" }, !bas.length && groups[0] && groups[0].title ? groups[0].title : ""), serv),
+      basBlock,
+      groups.length || bas.length ? groups.map((g, gi) => [gi > 0 || bas.length ? h("div", { class: "sec d-sec" }, g.title) : null,
         h("ul", { class: "d-ing" }, g.items.map(i => h("li", null,
           h("span", { class: "qty" }, [fmtQty(i.qty != null ? i.qty * f : null), i.unit].filter(Boolean).join(" ")),
           ingName(i))))]) : h("p", { class: "meta" }, "Keine Zutaten eingetragen."),
@@ -615,10 +642,15 @@ function gramsFor(i, food) {
   if (u.pack) return { g: i.qty * (food.pk || u.fallback) };
   return { g: null };
 }
-function computeNutrition(r) {
+function computeNutrition(r, depth) {
   const idx = foodIndex(), total = {}, rows = [];
   NUT.forEach(([k]) => total[k] = 0);
   (r.ingredients || []).filter(i => !i.section).forEach(i => {
+    const rr = i.ref && i.ref !== r.id && (depth || 0) < 3 && findRecipe(i.ref);
+    if (rr) { // Basic: dessen Nährwerte anteilig mitrechnen
+      const sub = computeNutrition(rr, (depth || 0) + 1), bf = basicFactor(i, rr) * (rr.servings || 1);
+      NUT.forEach(([k]) => total[k] += (sub.per[k] || 0) * bf);
+      rows.push({ i, kcal: (sub.per.kcal || 0) * bf }); sub.missing.forEach(x => rows.push(x)); return; }
     const food = matchFood(i.name, idx);
     if (!food) { rows.push({ i, miss: "nicht in der Tabelle" }); return; }
     const { g, note } = gramsFor(i, food);
@@ -1308,7 +1340,11 @@ document.addEventListener("visibilitychange", () => {
   if (state.online) loadAll();
 });
 function openCook(r) {
-  state.cook = { r, step: 0, awake: false, f: scaled(r) };
+  const f = scaled(r), steps = [], parts = [];
+  const add = (rr, ff, title) => { const l = stepList(rr); if (!l.length) return; parts.push({ title, start: steps.length, n: l.length }); l.forEach((st, k) => steps.push(Object.assign({}, st, { r: rr, f: ff, part: parts.length - 1, k }))); };
+  basicsOf(r).forEach(({ i, rr }) => add(rr, f * basicFactor(i, rr), i.name || rr.title));
+  add(r, f, r.title);
+  state.cook = { r, step: 0, awake: false, f, steps, parts };
   requestWake().then(ok => { if (state.cook) { state.cook.awake = ok; drawCook(); } });
   drawCook();
 }
@@ -1338,20 +1374,24 @@ function cookTimerCards(c, st) {
   });
 }
 function cookSide(c, st) {
-  const side = [stepIngLine(c.r, st.text, c.f, "cook-step-ings", st.links), ...cookTimerCards(c, st)].filter(Boolean);
+  const side = [stepIngLine(st.r || c.r, st.text, st.f || c.f, "cook-step-ings", st.links), ...cookTimerCards(c, st)].filter(Boolean);
   return side.length ? h("div", { class: "cook-side" }, side) : null;
 }
 function drawCook() {
   const c = state.cook; if (!c) return;
   let el = document.getElementById("cook");
   if (!el) { el = h("div", { class: "cook", id: "cook", role: "dialog", "aria-modal": "true", "aria-label": "Kochmodus" }); document.body.append(el); }
-  const steps = stepList(c.r), total = Math.max(1, steps.length), pos = c.step + 1;
+  const steps = c.steps, total = Math.max(1, steps.length), pos = c.step + 1, multi = c.parts.length > 1;
+  const st = steps[c.step], pt = st && c.parts[st.part], nextPt = st && st.k === pt.n - 1 && c.parts[st.part + 1];
   const main = !steps.length
     ? [h("p", { class: "cook-text" }, "Für dieses Rezept ist noch keine Zubereitung eingetragen.")]
-    : [h("div", { class: "cook-label" }, (steps[c.step].sec ? steps[c.step].sec + " · " : "") + "Schritt " + (c.step + 1) + " von " + steps.length), h("p", { class: "cook-text" }, linkedText(steps[c.step].text)), cookSide(c, steps[c.step])];
+    : [h("div", { class: "cook-label" }, multi ? pt.title + (st.sec && st.sec !== pt.title ? " · " + st.sec : "") + " · Schritt " + (st.k + 1) + " von " + pt.n : (st.sec ? st.sec + " · " : "") + "Schritt " + (c.step + 1) + " von " + steps.length), h("p", { class: "cook-text" }, linkedText(st.text)), cookSide(c, st),
+       nextPt ? h("p", { class: "cook-next" }, "Danach geht es mit " + nextPt.title + " weiter") : null];
   el.replaceChildren(
     h("div", { class: "cook-top" }, h("h2", null, c.r.title), h("button", { class: "btn", onclick: closeCook }, "Beenden")),
-    h("div", { class: "cook-progress", "aria-hidden": "true" }, h("div", { style: "width:" + Math.round(pos / total * 100) + "%" })),
+    multi ? h("div", { class: "cook-parts", "aria-hidden": "true" }, c.parts.map((p, k) => { const done = Math.min(p.n, Math.max(0, pos - p.start));
+      return h("div", { class: k === st.part ? "on" : null, style: "flex:" + Math.max(1, p.n) }, h("i", null, h("b", { style: "width:" + Math.round(done / p.n * 100) + "%" })), h("span", null, p.title)); }))
+    : h("div", { class: "cook-progress", "aria-hidden": "true" }, h("div", { style: "width:" + Math.round(pos / total * 100) + "%" })),
     h("div", { class: "cook-main" }, main),
     h("div", { class: "cook-nav" },
       h("button", { class: "btn", disabled: c.step <= 0, onclick: () => { c.step--; drawCook(); } }, "← Zurück"),
@@ -1363,7 +1403,7 @@ function drawCook() {
 document.addEventListener("keydown", e => {
   const c = state.cook; if (!c) return;
   if (e.key === "Escape") closeCook();
-  else if (e.key === "ArrowRight" && c.step < stepList(c.r).length - 1) { c.step++; drawCook(); }
+  else if (e.key === "ArrowRight" && c.step < c.steps.length - 1) { c.step++; drawCook(); }
   else if (e.key === "ArrowLeft" && c.step > 0) { c.step--; drawCook(); }
 });
 // Rezeptansicht: Wischen. Zur rechten Seite (Finger nach links) -> Zubereitung, zur linken Seite (Finger nach rechts) -> Zutaten bzw. Inhaltsverzeichnis
@@ -1387,7 +1427,7 @@ document.addEventListener("touchend", e => {
   const c = state.cook; if (!c || touchX == null) return;
   const dx = e.changedTouches[0].clientX - touchX; touchX = null;
   if (Math.abs(dx) < 60) return;
-  if (dx < 0 && c.step < stepList(c.r).length - 1) c.step++;
+  if (dx < 0 && c.step < c.steps.length - 1) c.step++;
   else if (dx > 0 && c.step > 0) c.step--;
   else return;
   drawCook();
