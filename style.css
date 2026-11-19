@@ -434,3 +434,67 @@ h1, h2, h3, .d-title, .chap { font-family: var(--font-display); font-weight: 600
 .h-menu-btn .logo-d { display: none; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .h-menu-btn .logo-l { display: none; } :root:not([data-theme="light"]) .h-menu-btn .logo-d { display: block; } }
 :root[data-theme="dark"] .h-menu-btn .logo-l { display: none; } :root[data-theme="dark"] .h-menu-btn .logo-d { display: block; }
+
+/* ===== iPad / grosse Bildschirme ===== */
+/* Zutaten und Zubereitung nebeneinander */
+.d-cols { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 40px; margin-top: 8px; align-items: start; }
+.d-colh { font-size: 22px; margin-bottom: 4px; }
+.d-col-ing { position: sticky; top: 20px; }
+@media (min-width: 760px) {
+  .wrap.full .d-sheet { max-width: 980px; padding-left: 40px; padding-right: 40px; }
+  .d-hero { height: min(46vh, 440px); }
+}
+/* Startseite breit: Inhaltsverzeichnis zweispaltig */
+@media (min-width: 900px) {
+  .wrap.home { max-width: 1040px; padding-left: 48px; padding-right: 48px; }
+  .home .toc { columns: 2; column-gap: 72px; }
+  .home .toc section { break-inside: avoid; }
+  .home .toc section, .home .toc section + section { margin-top: 0; padding-top: 0; padding-bottom: 10px; }
+  .home .toc .chap { padding-top: 8px; }
+  .fab { right: max(32px, calc(50% - 520px + 8px)); }
+}
+/* Rezept quer: breiter */
+@media (min-width: 1000px) {
+  .wrap.full .d-sheet { max-width: 1080px; padding-left: 48px; padding-right: 48px; }
+  .d-cols { gap: 56px; }
+  .d-dock .btn { max-width: 420px; }
+}
+/* Kochmodus quer: Schritt links, Zutaten rechts */
+@media (min-width: 1000px) and (orientation: landscape) {
+  .cook-main:has(.cook-step-ings) { display: grid; grid-template-columns: minmax(0, 1fr) 340px; grid-template-rows: auto auto; column-gap: 56px; align-content: center; }
+  .cook-main:has(.cook-step-ings) .cook-label { grid-column: 1; }
+  .cook-main:has(.cook-step-ings) .cook-text { grid-column: 1; }
+  .cook-main .cook-step-ings { grid-column: 2; grid-row: 1 / span 2; align-self: center; margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 22px 24px; color: var(--fg); }
+  .cook-main .cook-step-ings::before { content: "Dafür brauchst du"; display: block; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; font-weight: 700; color: var(--basil); margin-bottom: 10px; }
+  .cook-ings { columns: 3 220px; }
+}
+@media (min-width: 1000px) and (orientation: landscape) {
+  .cook-main .cook-step-ings .sep { display: none; }
+  .cook-main .cook-step-ings .si { display: block; padding: 5px 0; border-top: 1px solid var(--line); }
+  .cook-main .cook-step-ings .si:first-of-type { border-top: 0; }
+}
+
+.step-ings .si, .cook-step-ings .si { white-space: nowrap; }
+@media (min-width: 1000px) and (orientation: landscape) { .d-hero { height: 38vh; min-height: 260px; } }
+/* Verlinkung auf andere Rezepte */
+.ing-row { grid-template-columns: 84px minmax(0, 1fr) 30px 30px 26px; }
+.ing-lk { background: none; border: 0; padding: 4px; color: var(--muted); opacity: .45; display: grid; place-items: center; cursor: pointer; }
+.ing-lk .ic { width: 18px; height: 18px; }
+.ing-row.linked .ing-lk { color: var(--basil); opacity: 1; }
+.ing-row.linked .ing-n { color: var(--basil); font-weight: 600; }
+.rl-add { display: inline-flex; align-items: center; gap: 6px; }
+.rl-add .ic { width: 17px; height: 17px; }
+a.rlink { color: var(--basil); font-weight: 600; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; text-decoration-color: color-mix(in srgb, var(--basil) 45%, transparent); }
+a.rlink::after { content: " ›"; text-decoration: none; display: inline-block; margin-left: 2px; }
+.dlg-scroll { max-height: 46vh; overflow-y: auto; }
+.dlg-opt small { display: block; font-size: 13px; color: var(--muted); }
+.dlg-hint { margin: -6px 0 0; font-size: 14px; color: var(--muted); }
+.dlg .search { margin: 0; }
+.dlg .search input { border: 0; background: var(--sunk); }
+/* Rezept: Foto verschwommen als Hintergrund hinter der Karte */
+.d-blur { position: fixed; inset: -60px; z-index: -1; background-size: cover; background-position: center; filter: blur(48px) saturate(1.15); transform: translateZ(0); pointer-events: none; }
+.d-blur::after { content: ""; position: absolute; inset: 0; background: color-mix(in srgb, var(--bg) 45%, transparent); }
+.wrap.full .d-sheet { box-shadow: 0 -8px 40px rgba(0, 0, 0, .18); }
+.wrap.full .d-sheet { min-height: 70vh; }
+@media (min-width: 760px) { .d-dock { background: none; } .d-dock .btn { box-shadow: 0 8px 24px rgba(0,0,0,.25); } }
+.d-hero.noimg .round { background: rgba(10, 40, 42, .35); color: #fff; }

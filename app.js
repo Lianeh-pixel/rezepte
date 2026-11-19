@@ -1,6 +1,9 @@
 (() => {
 "use strict";
 const app = document.getElementById("app");
+// iPad/PC: ab 760 px Zutaten und Zubereitung nebeneinander
+const mqTwo = window.matchMedia("(min-width: 760px)");
+[mqTwo].forEach(m => m.addEventListener && m.addEventListener("change", () => { if (state.route && state.route.view !== "edit") render(); }));
 const CFG = window.RB_CONFIG;
 const sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseKey, {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
@@ -34,6 +37,19 @@ function h(tag, attrs, ...kids) {
   }
   for (const kid of kids.flat(Infinity)) if (kid != null && kid !== false) el.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
   return el;
+}
+// Verweise auf andere Rezepte: im Text als [[Titel]], bei Zutaten als ref (Rezept-ID)
+const RLINK = /\[\[([^\]]+)\]\]/g;
+const plainLinks = t => String(t || "").replace(RLINK, "$1");
+const recipeByTitle = t => { const k = String(t).trim().toLowerCase(); return state.recipes.find(x => (x.title || "").trim().toLowerCase() === k); };
+function openRecipe(id) { if (state.cook) closeCook(); go("rezept-" + id); }
+function linkedText(t) {
+  const out = []; let last = 0; String(t || "").replace(RLINK, (m, name, at) => {
+    out.push(t.slice(last, at)); last = at + m.length;
+    const rr = recipeByTitle(name);
+    out.push(rr ? h("a", { class: "rlink", href: "#rezept-" + rr.id, onclick: e => { e.preventDefault(); openRecipe(rr.id); } }, name) : name);
+  });
+  out.push(t.slice(last)); return out;
 }
 function toast(msg) {
   const t = document.getElementById("toast");
@@ -103,7 +119,7 @@ function stepIngredients(r, text, links) {
 }
 function stepIngLine(r, text, f, cls, links) {
   const list = stepIngredients(r, text, links); if (!list.length) return null;
-  return h("p", { class: cls }, list.map((i, k) => [k ? " · " : "", h("b", null, [fmtQty(i.qty != null ? i.qty * f : null), i.unit].filter(Boolean).join(" ")), (i.qty != null || i.unit ? " " : "") + i.name]));
+  return h("p", { class: cls }, list.map((i, k) => [k ? h("span", { class: "sep" }, " · ") : "", h("span", { class: "si" }, h("b", null, [fmtQty(i.qty != null ? i.qty * f : null), i.unit].filter(Boolean).join(" ")), (i.qty != null || i.unit ? " " : "") + i.name)]));
 }
 // Zubereitung: Abschnitte werden als Eintrag "# Name" in steps gespeichert
 const isStepSec = s => typeof s === "string" && /^#\s/.test(s);
@@ -363,7 +379,8 @@ const ICONS = {
   play: '<path d="M7 4l13 8-13 8z"/>',
   camera: '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
   crop: '<path d="M6 2v16h16M2 6h16v16"/>',
-  trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>'
+  trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+  link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>'
 };
 function icon(name, filled) {
   const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -385,7 +402,7 @@ function renderDetail(id) {
   const n = (r.ingredients || []).some(i => !i.section) ? computeNutrition(r) : null;
 
   const hero = h("div", { class: "d-hero" + (src ? "" : " noimg") },
-    src ? heroGallery(r) : h("span", { class: "initial", "aria-hidden": "true" }, (r.title || "?").trim().charAt(0).toUpperCase()),
+    src ? heroGallery(r) : h("img", { src: "icons/standard.svg", alt: "", class: "std" }),
     h("div", { class: "d-bar" },
       h("button", { class: "round", "aria-label": "Zurück", onclick: () => go("") }, icon("back")),
       h("div", null,
@@ -405,8 +422,9 @@ function renderDetail(id) {
     h("button", { role: "tab", "aria-selected": tab === "ing" ? "true" : "false", class: tab === "ing" ? "on" : null, onclick: () => { state.tab = "ing"; render(); } }, "Zutaten"),
     h("button", { role: "tab", "aria-selected": tab === "steps" ? "true" : "false", class: tab === "steps" ? "on" : null, onclick: () => { state.tab = "steps"; render(); } }, "Zubereitung"));
 
+  const two = mqTwo.matches;
   let body;
-  if (tab === "ing") {
+  if (two || tab === "ing") {
     const serv = r.servings ? h("span", { class: "servings" },
       h("button", { "aria-label": "Weniger Portionen", onclick: () => { state.servings[r.id] = Math.max(1, now - 1); render(); } }, "−"),
       h("span", null, servLabel(r, now)),
@@ -420,26 +438,36 @@ function renderDetail(id) {
       groups.length ? groups.map((g, gi) => [gi > 0 ? h("div", { class: "sec d-sec" }, g.title) : null,
         h("ul", { class: "d-ing" }, g.items.map(i => h("li", null,
           h("span", { class: "qty" }, [fmtQty(i.qty != null ? i.qty * f : null), i.unit].filter(Boolean).join(" ")),
-          h("span", null, i.name))))]) : h("p", { class: "meta" }, "Keine Zutaten eingetragen."),
+          ingName(i))))]) : h("p", { class: "meta" }, "Keine Zutaten eingetragen."),
       nutritionBlock(r));
-  } else {
+  }
+  if (two || tab !== "ing") {
+    const ingBody = body;
     body = stepList(r).length ? h("div", { class: "steps-wrap" }, stepGroups(r).filter(g => g.items.length).map((g, gi) => [
         g.title ? h("div", { class: "sec" + (gi > 0 ? " d-sec" : "") }, g.title) : null,
-        h("ol", { class: "steps" }, g.items.map(s => h("li", null, h("div", null, h("p", null, s), stepIngLine(r, s, f, "step-ings", g.links)))))]))
+        h("ol", { class: "steps" }, g.items.map(s => h("li", null, h("div", null, h("p", null, linkedText(s)), stepIngLine(r, s, f, "step-ings", g.links)))))]))
       : h("p", { class: "meta" }, "Keine Schritte eingetragen.");
+    if (two) body = h("div", { class: "d-cols" },
+      h("section", { class: "d-col-ing" }, h("h3", { class: "d-colh" }, "Zutaten"), ingBody),
+      h("section", { class: "d-col-steps" }, h("h3", { class: "d-colh" }, "Zubereitung"), body));
   }
 
+  app.append(h("div", { class: "d-blur", "aria-hidden": "true", style: "background-image:url('" + String(src || "icons/standard.svg").replace(/'/g, "%27") + "')" }));
   app.append(hero, h("div", { class: "d-sheet" },
     h("div", { class: "grab", "aria-hidden": "true" }),
     r.category ? h("div", { class: "sec" }, r.category) : null,
     h("h2", { class: "d-title" }, r.title),
     meta,
     r.notes ? h("p", { class: "notes" }, r.notes) : null,
-    nut, seg, body,
+    nut, two ? null : seg, body,
     r.source ? h("div", { class: "meta d-src" }, "Quelle: ", /^https?:\/\//.test(r.source) ? h("a", { href: r.source, target: "_blank", rel: "noopener" }, r.source.replace(/^https?:\/\/(www\.)?/, "").slice(0, 50)) : r.source) : null,
     stepList(r).length ? h("div", { class: "d-dock" }, h("button", { class: "btn primary", onclick: () => openCook(r) }, icon("play"), "Kochmodus starten")) : null));
 }
 
+function ingName(i) {
+  const rr = i.ref && findRecipe(i.ref);
+  return rr ? h("a", { class: "rlink", href: "#rezept-" + rr.id, onclick: e => { e.preventDefault(); openRecipe(rr.id); } }, i.name || rr.title) : h("span", null, i.name);
+}
 // ---------- nutrition ----------
 const NUT = [["kcal", "kcal", ""], ["protein", "Eiweiß", " g"], ["carbs", "Kohlenh.", " g"], ["sugar", "davon Zucker", " g"], ["fat", "Fett", " g"], ["fiber", "Ballastst.", " g"], ["salt", "Salz", " g"]];
 let builtinIndex = null;
@@ -550,7 +578,9 @@ function readIngs() {
       const q = r.querySelector(".ing-q").value.trim(), n = r.querySelector(".ing-n").value.trim().replace(/:+$/, "");
       if (!q && !n) return null;
       const p = parseIngredient((q ? q + " " : "") + n);
-      return p && p.section ? { qty: null, unit: "", name: n } : p;
+      const o = p && p.section ? { qty: null, unit: "", name: n } : p;
+      if (o && r.dataset.ref) o.ref = r.dataset.ref;
+      return o;
     }).filter(Boolean);
     if (t && (items.length || b.parentNode.children.length > 1)) out.push({ section: t });
     out.push(...items);
@@ -569,7 +599,11 @@ function ingEditor(list) {
     const n = h("input", { type: "text", class: "ing-n", placeholder: "Zutat", "aria-label": "Zutat", value: i ? i.name || "" : "", autocomplete: "off" });
     const grip = h("span", { class: "ing-grip", "aria-hidden": "true", title: "Ziehen zum Verschieben" }, "≡");
     const del = h("button", { type: "button", class: "ing-x", "aria-label": "Zutat entfernen", onclick: e => { e.preventDefault(); const nx = el.nextElementSibling || el.previousElementSibling; el.remove(); if (nx) nx.querySelector(".ing-n").focus(); } }, "×");
-    const el = h("div", { class: "ing-row" }, q, n, grip, del);
+    const lk = h("button", { type: "button", class: "ing-lk", "aria-label": "Rezept verlinken", title: "Rezept verlinken" }, icon("link"));
+    const el = h("div", { class: "ing-row" }, q, n, lk, grip, del);
+    const setRef = id => { if (id) el.dataset.ref = id; else delete el.dataset.ref; el.classList.toggle("linked", !!id); };
+    setRef(i && i.ref && findRecipe(i.ref) ? i.ref : null);
+    lk.addEventListener("click", e => { e.preventDefault(); openRecipeDialog(el.dataset.ref, rr => { setRef(rr ? rr.id : null); if (rr && !n.value.trim()) n.value = rr.title; }); });
     // Enter: neue Zeile darunter
     n.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); row(null, list, el, true); } });
     q.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); n.focus(); } });
@@ -679,6 +713,31 @@ function openLinkDialog(current, done) {
   document.body.append(ov);
   document.addEventListener("keydown", esc);
 }
+// Fenster: anderes Rezept auswählen
+function openRecipeDialog(currentId, done, insertMode) {
+  const close = () => { ov.remove(); document.removeEventListener("keydown", esc); };
+  const esc = e => { if (e.key === "Escape") close(); };
+  const self = state.route && state.route.id;
+  const q = h("input", { type: "search", placeholder: "Rezept suchen", "aria-label": "Rezept suchen", autocomplete: "off" });
+  const list = h("div", { class: "dlg-list dlg-scroll" });
+  const draw = () => {
+    const k = norm(q.value);
+    const rs = state.recipes.filter(x => x.id !== self && (!k || norm(x.title || "").includes(k))).sort((a, b) => (a.title || "").localeCompare(b.title || "", "de"));
+    list.replaceChildren(...(rs.length ? rs.map(x => h("button", { type: "button", class: "dlg-opt" + (x.id === currentId ? " on" : ""), onclick: e => { e.preventDefault(); close(); done(x); } },
+      h("span", { class: "dlg-check", "aria-hidden": "true" }, x.id === currentId ? "✓" : ""), h("span", null, x.title, h("small", null, x.category || "")))) : [h("p", { class: "dlg-empty" }, "Kein Rezept gefunden.")]));
+  };
+  q.addEventListener("input", draw);
+  const box = h("div", { class: "dlg", role: "dialog", "aria-modal": "true", "aria-label": "Rezept verlinken" },
+    h("h3", null, "Rezept verlinken"),
+    h("p", { class: "dlg-hint" }, insertMode ? "Der Name wird als Link in den Text eingefügt." : "Die Zutat führt dann zu diesem Rezept."),
+    h("div", { class: "search" }, searchIcon(), q), list,
+    h("div", { class: "dlg-btns" },
+      currentId ? h("button", { type: "button", class: "btn danger", onclick: e => { e.preventDefault(); close(); done(null); } }, "Verlinkung entfernen") : null,
+      h("button", { type: "button", class: "btn", onclick: e => { e.preventDefault(); close(); } }, "Abbrechen")));
+  const ov = h("div", { class: "dlg-ov", onclick: e => { if (e.target === ov) close(); } }, box);
+  draw(); document.body.append(ov); document.addEventListener("keydown", esc);
+  setTimeout(() => q.focus(), 50);
+}
 function stepEditor(v) {
   const boxes = h("div", { class: "ing-boxes", id: "step-boxes" });
   const mark = () => boxes.classList.toggle("multi", boxes.children.length > 1);
@@ -690,7 +749,10 @@ function stepEditor(v) {
       el.dataset.links = JSON.stringify(links);
       linkRow.replaceChildren(
         h("button", { type: "button", class: "ing-add", onclick: e => { e.preventDefault(); openLinkDialog(links, nl => { links = nl; drawLinks(); }); } }, "Zutatenliste verknüpfen"),
-        links.length ? h("span", { class: "link-info" }, links.join(", ")) : null);
+        links.length ? h("span", { class: "link-info" }, links.join(", ")) : null,
+        h("button", { type: "button", class: "ing-add rl-add", onclick: e => { e.preventDefault(); openRecipeDialog(null, rr => { if (!rr) return;
+          const tok = "[[" + rr.title + "]]", a = ta.selectionStart != null && document.activeElement === ta ? ta.selectionStart : ta.value.length, b = ta.selectionEnd != null && document.activeElement === ta ? ta.selectionEnd : a;
+          ta.value = ta.value.slice(0, a) + tok + ta.value.slice(b); ta.focus(); ta.setSelectionRange(a + tok.length, a + tok.length); }, true); } }, icon("link"), "Rezept verlinken"));
     };
     const ta = h("textarea", { rows: String(Math.max(5, g.items.length * 2 + 1)), placeholder: "Ofen auf 180 °C vorheizen.\n\nMehl und Eier verrühren.", "aria-label": "Schritte" }, g.items.join("\n\n"));
     const del = h("button", { type: "button", class: "ing-box-del", onclick: e => {
@@ -1032,7 +1094,7 @@ function drawCook() {
   const main = c.step < 0
     ? [h("div", { class: "cook-label" }, "Zutaten bereitlegen" + (c.r.servings ? " · " + servLabel(c.r, Math.round(c.r.servings * c.f)) : "")),
        h("ul", { class: "cook-ings" }, (c.r.ingredients || []).map(i => i.section ? h("li", null, h("span", { class: "cook-label" }, i.section)) : h("li", null, h("b", null, [fmtQty(i.qty != null ? i.qty * c.f : null), i.unit].filter(Boolean).join(" ")), " ", i.name)))]
-    : [h("div", { class: "cook-label" }, (steps[c.step].sec ? steps[c.step].sec + " · " : "") + "Schritt " + (c.step + 1) + " von " + steps.length), h("p", { class: "cook-text" }, steps[c.step].text), stepIngLine(c.r, steps[c.step].text, c.f, "cook-step-ings", steps[c.step].links)];
+    : [h("div", { class: "cook-label" }, (steps[c.step].sec ? steps[c.step].sec + " · " : "") + "Schritt " + (c.step + 1) + " von " + steps.length), h("p", { class: "cook-text" }, linkedText(steps[c.step].text)), stepIngLine(c.r, steps[c.step].text, c.f, "cook-step-ings", steps[c.step].links)];
   el.replaceChildren(
     h("div", { class: "cook-top" }, h("h2", null, c.r.title), h("button", { class: "btn", onclick: closeCook }, "Beenden")),
     h("div", { class: "cook-progress", "aria-hidden": "true" }, h("div", { style: "width:" + Math.round(pos / total * 100) + "%" })),
@@ -1064,7 +1126,7 @@ document.addEventListener("touchend", e => {
 
 // ---------- PDF ----------
 function safeName(s) { return (s || "Rezept").replace(/[\\/:*?"<>|]+/g, " ").trim().slice(0, 80) || "Rezept"; }
-function pdfText(s) { return String(s || "").replace(/⅓/g, "1/3").replace(/⅔/g, "2/3").replace(/⅛/g, "1/8").replace(/[“”„]/g, '"').replace(/[–—]/g, "-").replace(/→/g, "-").replace(/[^\x00-\xFF€]/g, ""); }
+function pdfText(s) { return plainLinks(s).replace(/⅓/g, "1/3").replace(/⅔/g, "2/3").replace(/⅛/g, "1/8").replace(/[“”„]/g, '"').replace(/[–—]/g, "-").replace(/→/g, "-").replace(/[^\x00-\xFF€]/g, ""); }
 async function imgData(src, aspect) {
   try {
     const res = await fetch(src); if (!res.ok) return null;
