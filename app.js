@@ -755,7 +755,7 @@ async function exportPdf(recipes, filename) {
     }
     if (noteLines.length) { font("times", "italic", 11, GREY); ensure(noteH); y = lines(noteLines, PW / 2, y, 11, 5, { align: "center" }) + 5; }
 
-    const ING_STYLE = window.RB_ING_STYLE || "leader";
+    const ING_STYLE = window.RB_ING_STYLE || "column";
     const drawIngredients = (x, top, width, qw) => {
       const boxed = ING_STYLE === "box";
       let yy = heading("Zutaten", x, top, width);
@@ -765,7 +765,10 @@ async function exportPdf(recipes, filename) {
         if (row.sec) { yy += 2; font("helvetica", "bold", 7.5, GREEN); doc.text(row.sec.toUpperCase(), x + pad, yy + 2.6, { charSpace: 0.6 }); yy += 5; return; }
         if (yy + 5 > BOTTOM) { newPage(); yy = y; }
         const base = yy + 11 * PT * 0.8;
-        if (ING_STYLE === "leader") {
+        if (ING_STYLE === "column") {
+          font("times", "bold", 11, INK); doc.text(row.q, x + qw - 1, base, { align: "right" });
+          font("times", "normal", 11, INK); yy = lines(row.name, x + qw + 1.5, yy, 11, 4.8) + 1.2;
+        } else if (ING_STYLE === "leader") {
           font("times", "italic", 11, INK); const qW = row.q ? doc.getTextWidth(row.q) : 0;
           font("times", "normal", 11, INK); const nl = doc.splitTextToSize(row.nameRaw, width - qW - 8);
           nl.forEach((l, i) => doc.text(l, x, base + i * 4.8));
