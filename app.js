@@ -95,7 +95,9 @@ function fmtQty(q) {
 function catRank(c) { const n = String(c || "").trim().toLowerCase(); return n === "draft" ? 2 : n === "ohne kategorie" ? 1 : 0; }
 // Reihenfolge nach Verzehr: Frühstück, Vorspeise, Hauptgang mit Saucen und Grundrezepten, Nachtisch, Kaffee
 const CAT_ORDER = [/^brot|brötchen|frühstück|^teig|grund|basis/, /suppe|eintopf|vorspeise|salat/, /snack|finger/, /auflauf|aufläufe|pasta|nudel/, /ragout|ragu|ragù|fleisch|fisch/, /tofu|vegan|vegetar/, /gemüse/, /haupt/, /beilage/, /sauce|soße|dip/, /dessert|nachtisch/, /kuchen|gebäck|torte/, /kekse|plätzchen|cookies/];
-function catPos(c) { const k = String(c || "").toLowerCase(); const i = CAT_ORDER.findIndex(re => re.test(k)); return i < 0 ? CAT_ORDER.length : i; }
+// Feste Kategorien (Lias Liste, in Verzehr-Reihenfolge)
+const CATS = ["Brot & Teig", "Suppen & Eintöpfe", "Snacks & Fingerfood", "Pasta & Aufläufe", "Ragout & Ragù", "Beilagen", "Saucen", "Dessert", "Kuchen & Gebäck", "Kekse", "Draft"];
+function catPos(c) { const j = CATS.indexOf(String(c || "").trim()); if (j >= 0) return j; const k = String(c || "").toLowerCase(); const i = CAT_ORDER.findIndex(re => re.test(k)); return CATS.length + (i < 0 ? CAT_ORDER.length : i); }
 function catCmp(a, b) { return catRank(a) - catRank(b) || catPos(a) - catPos(b) || String(a).localeCompare(String(b), "de"); }
 function consolidate(list) {
   const out = [], by = new Map();
@@ -1001,7 +1003,12 @@ function renderForm(id) {
   });
   const mrow = (label, control, unit, extra) => h(extra ? "div" : "label", { class: "mrow" }, h("span", null, label), control, unit ? h("em", null, unit) : null, extra || null);
   const inp = (fid, val, extra) => h("input", Object.assign({ id: fid, value: val == null ? "" : val }, extra || {}));
-  const dl = h("datalist", { id: "catlist" }, ["Frühstück","Vorspeise","Hauptgericht","Beilage","Suppe","Salat","Dessert","Kuchen & Gebäck","Brot","Getränk","Snack", ...categories()].filter((x, i, a) => a.indexOf(x) === i).map(c => h("option", { value: c })));
+  const dl = null;
+  const curCat = String(v.category || "").trim();
+  const catSel = h("select", { id: "f-cat", class: "f-sunit f-catsel", "aria-label": "Kategorie" },
+    h("option", { value: "", selected: !curCat ? true : null, disabled: true }, "Bitte wählen"),
+    CATS.map(c => h("option", { value: c, selected: c === curCat ? true : null }, c)),
+    curCat && !CATS.includes(curCat) ? h("option", { value: curCat, selected: true }, curCat) : null);
   const photoBox = h("div", { class: "photo-pick" });
   const fileIn = h("input", { type: "file", id: "f-photo", accept: "image/*", multiple: true, hidden: true });
   if (!state.draftPhotos) { state.draftPhotos = photoPaths(v).map(path => ({ path })); state.photoSel = 0; }
@@ -1055,7 +1062,7 @@ function renderForm(id) {
     photoBox,
     h("input", { id: "f-title", class: "f-title", value: v.title || "", required: true, placeholder: "Name des Rezepts", "aria-label": "Titel" }),
     h("div", { class: "meta-list" },
-      mrow("Kategorie", inp("f-cat", v.category, { list: "catlist", placeholder: "z. B. Kuchen & Gebäck" })),
+      mrow("Kategorie", null, null, catSel),
       mrow("Menge", servIn, null, unitSel),
       servAsk,
       mrow("Vorbereitung", inp("f-prep", v.prep_min, { type: "number", min: "0", inputmode: "numeric", placeholder: "–" }), "Min."),
