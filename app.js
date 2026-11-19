@@ -40,14 +40,16 @@ function h(tag, attrs, ...kids) {
 }
 // Verweise auf andere Rezepte: im Text als [[Titel]], bei Zutaten als ref (Rezept-ID)
 const RLINK = /\[\[([^\]]+)\]\]/g;
-const plainLinks = t => String(t || "").replace(RLINK, "$1");
+const TTOK = /\{\s*Timer:?\s*([^}]*)\}/gi;
+const plainLinks = t => String(t || "").replace(RLINK, "$1").replace(TTOK, "").replace(/[ \t]{2,}/g, " ").trim();
 const recipeByTitle = t => { const k = String(t).trim().toLowerCase(); return state.recipes.find(x => (x.title || "").trim().toLowerCase() === k); };
 function openRecipe(id) { if (state.cook) closeCook(); go("rezept-" + id); }
 function linkedText(t) {
-  const out = []; let last = 0; String(t || "").replace(RLINK, (m, name, at) => {
+  t = String(t || ""); const out = []; let last = 0;
+  t.replace(/\[\[([^\]]+)\]\]|\{\s*Timer:?\s*([^}]*)\}/gi, (m, name, dur, at) => {
     out.push(t.slice(last, at)); last = at + m.length;
-    const rr = recipeByTitle(name);
-    out.push(rr ? h("a", { class: "rlink", href: "#rezept-" + rr.id, onclick: e => { e.preventDefault(); openRecipe(rr.id); } }, name) : name);
+    if (name != null) { const rr = recipeByTitle(name);
+      out.push(rr ? h("a", { class: "rlink", href: "#rezept-" + rr.id, onclick: e => { e.preventDefault(); openRecipe(rr.id); } }, name) : name); }
   });
   out.push(t.slice(last)); return out;
 }
@@ -442,6 +444,11 @@ const ICONS = {
   camera: '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
   crop: '<path d="M6 2v16h16M2 6h16v16"/>',
   trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+  timer: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9.5 2.5h5"/>',
+  oven: '<rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 8h18"/><rect x="7" y="11" width="10" height="7" rx="1.5"/><path d="M7 5.5h.01M10.5 5.5h.01"/>',
+  flame: '<path d="M12 21c-3.9 0-6.5-2.6-6.5-6 0-3.4 2.6-5.6 4-8.5.4 2 1.6 3.2 2.8 3.2 0-2 .6-4.3 2.2-6.2.8 3.1 4 5.8 4 10 0 4.1-2.7 7.5-6.5 7.5z"/>',
+  pot: '<path d="M4 10h16M5 10v7a3 3 0 0 0 3 3h8a3 3 0 0 0 3-3v-7M2.5 10h2M19.5 10h2M9 7c-.9-1.1.9-1.7 0-3M15 7c-.9-1.1.9-1.7 0-3"/>',
+  thermo: '<path d="M14 14.8V5a2 2 0 0 0-4 0v9.8a4 4 0 1 0 4 0z"/><path d="M12 9v7"/>',
   image: '<rect x="3" y="5" width="18" height="14" rx="3"/><circle cx="9" cy="10" r="1.8"/><path d="M21 16l-5-5-8 8"/>',
   link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>'
 };
@@ -510,7 +517,7 @@ function renderDetail(id) {
     const ingBody = body;
     body = stepList(r).length ? h("div", { class: "steps-wrap" }, stepGroups(r).filter(g => g.items.length).map((g, gi) => [
         g.title ? h("div", { class: "sec" + (gi > 0 ? " d-sec" : "") }, g.title) : null,
-        h("ol", { class: "steps" }, g.items.map(s => h("li", null, h("div", null, h("p", null, linkedText(s)), stepIngLine(r, s, f, "step-ings", g.links)))))]))
+        h("ol", { class: "steps" }, g.items.map(s => h("li", null, h("div", null, h("p", null, linkedText(s)), stepTimerLine(s), stepIngLine(r, s, f, "step-ings", g.links)))))]))
       : h("p", { class: "meta" }, "Keine Schritte eingetragen.");
     if (two) body = h("div", { class: "d-cols" },
       h("section", { class: "d-col-ing" }, h("h3", { class: "d-colh" }, "Zutaten"), ingBody),
@@ -804,6 +811,53 @@ function openRecipeDialog(currentId, done, insertMode) {
   draw(); document.body.append(ov); document.addEventListener("keydown", esc);
   setTimeout(() => q.focus(), 50);
 }
+// Text an der zuletzt benutzten Cursor-Stelle einfügen (sonst am Ende des Schritts)
+function insertTok(ta, tok) {
+  const has = ta.dataset.sel != null, a = has ? +ta.dataset.sel : ta.value.length, b = has ? +ta.dataset.selEnd : a;
+  const pre = ta.value.slice(0, a), sp = pre && !/\s$/.test(pre) ? " " : "";
+  ta.value = pre + sp + tok + ta.value.slice(b); const p = a + sp.length + tok.length;
+  ta.focus(); ta.setSelectionRange(p, p); ta.dataset.sel = p; ta.dataset.selEnd = p;
+}
+// Fenster: Timer mit Gerät, Temperatur und Zeit
+function devIcon(d) { const k = String(d || "").toLowerCase(); return /herd|pfanne|kochfeld/.test(k) ? "flame" : /reis|topf|kocher/.test(k) ? "pot" : "oven"; }
+// kleine Zeile unter dem Schritt in der Rezeptansicht: Gerät · Temperatur · Zeit
+function stepTimerLine(text, cls) {
+  const ts = stepTimers(text); if (!ts.length) return null;
+  return ts.map(t => h("p", { class: cls || "step-tmr" },
+    t.dev ? h("span", null, icon(devIcon(t.dev)), t.dev) : null,
+    t.temp ? h("span", null, icon("thermo"), t.temp) : null,
+    h("span", null, icon("timer"), fmtDur(t.sec))));
+}
+const DEVICES = ["Backofen", "Herd", "Airfryer", "Mikrowelle", "Reiskocher", "Schnellkochtopf"];
+function openTimerDialog(done) {
+  const close = () => { ov.remove(); document.removeEventListener("keydown", esc); };
+  const esc = e => { if (e.key === "Escape") close(); };
+  let dev = "", min = 0;
+  const devIn = h("input", { type: "text", placeholder: "anderes Gerät", "aria-label": "Gerät" });
+  const devRow = h("div", { class: "tmr-chips" });
+  const drawDev = () => devRow.replaceChildren(...DEVICES.map(d => h("button", { type: "button", class: "chip" + (dev === d ? " on" : ""), "aria-pressed": dev === d ? "true" : "false", onclick: e => { e.preventDefault(); dev = dev === d ? "" : d; devIn.value = ""; drawDev(); } }, d)));
+  devIn.addEventListener("input", () => { dev = devIn.value.trim(); drawDev(); });
+  const temp = h("input", { type: "text", inputmode: "text", placeholder: "z. B. 175 °C Umluft oder Stufe 6", "aria-label": "Temperatur" });
+  const hh = h("input", { type: "number", min: "0", max: "23", inputmode: "numeric", placeholder: "0", "aria-label": "Stunden" });
+  const mm = h("input", { type: "number", min: "0", max: "59", inputmode: "numeric", placeholder: "0", "aria-label": "Minuten" });
+  const preRow = h("div", { class: "tmr-chips" });
+  const drawPre = () => preRow.replaceChildren(...[5, 10, 15, 20, 30, 45, 60, 90].map(m => h("button", { type: "button", class: "chip" + (min === m ? " on" : ""), onclick: e => { e.preventDefault(); min = m; hh.value = Math.floor(m / 60) || ""; mm.value = m % 60 || ""; drawPre(); } }, fmtDur(m * 60))));
+  [hh, mm].forEach(i => i.addEventListener("input", () => { min = (+hh.value || 0) * 60 + (+mm.value || 0); drawPre(); }));
+  const ok = e => { e && e.preventDefault(); const sec = ((+hh.value || 0) * 60 + (+mm.value || 0)) * 60; if (!sec) { mm.focus(); return; }
+    let t = temp.value.trim().replace(/[{}|]/g, ""); if (/^\d+$/.test(t)) t += " °C";
+    close(); done({ sec, dev: dev.replace(/[{}|]/g, ""), temp: t }); };
+  const box = h("div", { class: "dlg tmr-dlg", role: "dialog", "aria-modal": "true", "aria-label": "Timer" },
+    h("h3", null, "Timer"),
+    h("div", { class: "tmr-f" }, h("span", { class: "sec" }, "Gerät"), devRow, devIn),
+    h("div", { class: "tmr-f" }, h("span", { class: "sec" }, "Temperatur"), temp),
+    h("div", { class: "tmr-f" }, h("span", { class: "sec" }, "Zeit"), preRow, h("div", { class: "tmr-own" }, h("label", null, hh, "Std."), h("label", null, mm, "Min."))),
+    h("p", { class: "dlg-hint" }, "Erscheint nur im Kochmodus als Timer-Knopf."),
+    h("div", { class: "dlg-btns" },
+      h("button", { type: "button", class: "btn", onclick: e => { e.preventDefault(); close(); } }, "Abbrechen"),
+      h("button", { type: "button", class: "btn primary", onclick: ok }, "Einfügen")));
+  const ov = h("div", { class: "dlg-ov", onclick: e => { if (e.target === ov) close(); } }, box);
+  drawDev(); drawPre(); document.body.append(ov); document.addEventListener("keydown", esc);
+}
 function stepEditor(v) {
   const boxes = h("div", { class: "ing-boxes", id: "step-boxes" });
   const mark = () => boxes.classList.toggle("multi", boxes.children.length > 1);
@@ -813,14 +867,16 @@ function stepEditor(v) {
     const linkRow = h("div", { class: "link-row" });
     const drawLinks = () => {
       el.dataset.links = JSON.stringify(links);
-      linkRow.replaceChildren(
+      linkRow.replaceChildren(...[
         h("button", { type: "button", class: "ing-add", onclick: e => { e.preventDefault(); openLinkDialog(links, nl => { links = nl; drawLinks(); }); } }, "Zutatenliste verknüpfen"),
         links.length ? h("span", { class: "link-info" }, links.join(", ")) : null,
+        h("button", { type: "button", class: "ing-add rl-add", onclick: e => { e.preventDefault(); openTimerDialog(t => insertTok(ta, "{Timer " + [fmtDur(t.sec), t.dev, t.temp].join(" | ").replace(/( \| )+$/, "") + "}")); } }, icon("timer"), "Timer"),
         h("button", { type: "button", class: "ing-add rl-add", onclick: e => { e.preventDefault(); openRecipeDialog(null, rr => { if (!rr) return;
-          const tok = "[[" + rr.title + "]]", a = ta.selectionStart != null && document.activeElement === ta ? ta.selectionStart : ta.value.length, b = ta.selectionEnd != null && document.activeElement === ta ? ta.selectionEnd : a;
-          ta.value = ta.value.slice(0, a) + tok + ta.value.slice(b); ta.focus(); ta.setSelectionRange(a + tok.length, a + tok.length); }, true); } }, icon("link"), "Rezept verlinken"));
+          insertTok(ta, "[[" + rr.title + "]]"); }, true); } }, icon("link"), "Rezept verlinken")].filter(Boolean));
     };
     const ta = h("textarea", { rows: String(Math.max(5, g.items.length * 2 + 1)), placeholder: "Ofen auf 180 °C vorheizen.\n\nMehl und Eier verrühren.", "aria-label": "Schritte" }, g.items.join("\n\n"));
+    const keepSel = () => { ta.dataset.sel = ta.selectionStart; ta.dataset.selEnd = ta.selectionEnd; };
+    ["keyup", "mouseup", "input", "blur"].forEach(ev => ta.addEventListener(ev, keepSel));
     const del = h("button", { type: "button", class: "ing-box-del", onclick: e => {
       e.preventDefault();
       if (ta.value.trim() && del.dataset.sure !== "1") { del.dataset.sure = "1"; del.textContent = "Wirklich entfernen?"; return; }
@@ -1138,6 +1194,72 @@ async function deleteRecipe(r) {
 }
 async function logout() { await sb.auth.signOut(); try { localStorage.removeItem(CACHE_KEY); localStorage.removeItem(URL_KEY); } catch (e) {} state.photoUrls = {}; go(""); }
 
+
+// ---------- Timer ----------
+// Dauer aus einem Timer-Eintrag {Timer 45 Min.} lesen: "45 Min.", "1 Std. 30 Min.", "90" (= Minuten)
+const TIME_RE = /(\d+(?:[,.]\d+)?)\s*(Minuten|Minute|Min\.?|Stunden|Stunde|Std\.?|Sekunden|Sek\.?)/gi;
+function parseDur(str) {
+  str = String(str || ""); let sec = 0, m; TIME_RE.lastIndex = 0;
+  while ((m = TIME_RE.exec(str))) { const n = parseFloat(m[1].replace(",", ".")), u = m[2].toLowerCase(); sec += n * (u.startsWith("st") ? 3600 : u.startsWith("se") ? 1 : 60); }
+  if (!sec && /^\s*\d+(?:[,.]\d+)?\s*$/.test(str)) sec = parseFloat(str.replace(",", ".")) * 60;
+  return Math.round(sec) > 0 && sec <= 24 * 3600 ? Math.round(sec) : 0;
+}
+// {Timer 45 Min. | Backofen | 175 °C}
+function stepTimers(text) {
+  const out = []; String(text || "").replace(TTOK, (m, d) => { const [z, dev, temp] = d.split("|").map(x => x.trim()); const sec = parseDur(z); if (sec) out.push({ sec, dev: dev || "", temp: temp || "" }); });
+  return out;
+}
+function fmtClock(s) { s = Math.max(0, Math.ceil(s)); const hh = Math.floor(s / 3600), mm = Math.floor(s % 3600 / 60), ss = s % 60; return (hh ? hh + ":" + String(mm).padStart(2, "0") : mm) + ":" + String(ss).padStart(2, "0"); }
+function fmtDur(sec) { const hh = Math.floor(sec / 3600), mm = Math.round(sec % 3600 / 60); if (sec < 60) return sec + " Sek."; return [hh ? hh + " Std." : "", mm ? mm + " Min." : ""].filter(Boolean).join(" "); }
+state.timers = [];
+let audioCtx = null, timerTick = null;
+function unlockAudio() { try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); audioCtx.resume && audioCtx.resume(); } catch (e) {} }
+// Klingeln wie eine alte Eieruhr: schnelles Klöppeln auf eine kleine Glocke
+function ring() {
+  try { if (!audioCtx) return; const t0 = audioCtx.currentTime + .02, out = audioCtx.createGain(); out.gain.value = .22; out.connect(audioCtx.destination);
+    const parts = [[2380, 1], [3460, .55], [5150, .3], [7020, .14]];
+    for (let k = 0; k < 42; k++) { const t = t0 + k * .058, jit = 1 + (Math.random() - .5) * .006, vel = .75 + Math.random() * .25;
+      parts.forEach(([f, a]) => { const o = audioCtx.createOscillator(), g = audioCtx.createGain(); o.type = "sine"; o.frequency.value = f * jit;
+        g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(a * vel, t + .002); g.gain.exponentialRampToValueAtTime(.0008, t + .28);
+        o.connect(g); g.connect(out); o.start(t); o.stop(t + .3); }); }
+  } catch (e) {}
+  try { navigator.vibrate && navigator.vibrate([400, 120, 400, 120, 400]); } catch (e) {}
+}
+function startTimer(sec, name, key) {
+  unlockAudio();
+  state.timers.push({ id: Date.now() + Math.random(), key: key || "", name: name || "", sec, end: Date.now() + sec * 1000, done: false, rang: 0 });
+  drawTimers(); if (state.cook) drawCook();
+  if (!timerTick) timerTick = setInterval(tickTimers, 500);
+}
+function stopTimer(id) { state.timers = state.timers.filter(t => t.id !== id); drawTimers(); if (state.cook) drawCook(); if (!state.timers.length) { clearInterval(timerTick); timerTick = null; } }
+function tickTimers() {
+  const now = Date.now(); let changed = false;
+  state.timers.forEach(t => {
+    const left = (t.end - now) / 1000;
+    if (left <= 0 && !t.done) { t.done = true; t.rang = 0; changed = true; }
+    if (t.done && t.rang < 10 && (!t.last || now - t.last > 4000)) { t.last = now; t.rang++; ring(); }
+  });
+  if (changed && state.cook) drawCook();
+  drawTimers();
+  document.querySelectorAll("[data-tkey]").forEach(n => { const t = state.timers.find(x => x.key === n.dataset.tkey); if (t && !t.done) n.textContent = fmtClock((t.end - now) / 1000); });
+}
+function curStepKey() { const c = state.cook; return c && c.step >= 0 ? c.r.id + ":" + c.step + ":" : null; }
+function drawTimers() {
+  let el = document.getElementById("timers");
+  const ck = curStepKey(), list = state.timers.filter(t => !ck || !t.key.startsWith(ck));
+  if (!list.length) { el && el.remove(); return; }
+  if (!el) { el = h("div", { class: "tmr-bar", id: "timers", "aria-live": "polite" }); document.body.append(el); }
+  el.classList.toggle("in-cook", !!state.cook);
+  const now = Date.now(), sig = list.map(t => t.id + (t.done ? "d" : "")).join("|");
+  if (el.dataset.sig === sig) { el.querySelectorAll(".tmr-t").forEach((n, k) => { const t = list[k]; n.textContent = t.done ? "Fertig!" : fmtClock((t.end - now) / 1000); }); return; }
+  el.dataset.sig = sig;
+  el.replaceChildren(...list.map(t => h("div", { class: "tmr" + (t.done ? " done" : ""), onclick: t.done ? () => stopTimer(t.id) : null },
+    icon("timer"),
+    h("span", { class: "tmr-t" }, t.done ? "Fertig!" : fmtClock((t.end - now) / 1000)),
+    t.name ? h("span", { class: "tmr-n" }, t.name) : null,
+    h("button", { class: "tmr-x", "aria-label": t.done ? "Timer ausschalten" : "Timer abbrechen", onclick: () => stopTimer(t.id) }, "×"))));
+}
+
 // ---------- cooking mode ----------
 async function requestWake() { try { if ("wakeLock" in navigator) { state.wakeLock = await navigator.wakeLock.request("screen"); return true; } } catch (e) {} return false; }
 function releaseWake() { try { state.wakeLock && state.wakeLock.release(); } catch (e) {} state.wakeLock = null; }
@@ -1151,7 +1273,23 @@ function openCook(r) {
   requestWake().then(ok => { if (state.cook) { state.cook.awake = ok; drawCook(); } });
   drawCook();
 }
-function closeCook() { state.cook = null; releaseWake(); const el = document.getElementById("cook"); el && el.remove(); }
+function closeCook() { state.cook = null; releaseWake(); const el = document.getElementById("cook"); el && el.remove(); drawTimers(); }
+function cookTimerCards(c, st) {
+  return stepTimers(st.text).map(({ sec, dev, temp }, k) => {
+    const what = dev || temp ? [dev ? h("span", null, icon(devIcon(dev)), dev) : null, temp ? h("span", null, icon("thermo"), temp) : null] : null;
+    const key = c.r.id + ":" + c.step + ":" + k, t = state.timers.find(x => x.key === key);
+    if (!t) return h("button", { class: "tmr-card", onclick: () => startTimer(sec, dev || st.sec || ("Schritt " + (c.step + 1)), key) },
+      h("span", { class: "tmr-ic" }, icon("timer")), what ? h("span", { class: "tmr-what" }, what) : null, h("span", { class: "tmr-big" }, fmtDur(sec)), h("span", { class: "tmr-sub" }, "Timer starten"));
+    if (t.done) return h("button", { class: "tmr-card done", onclick: () => stopTimer(t.id) },
+      h("span", { class: "tmr-ic" }, icon("timer")), what ? h("span", { class: "tmr-what" }, what) : null, h("span", { class: "tmr-big" }, "Fertig!"), h("span", { class: "tmr-sub" }, "Tippen zum Ausschalten"));
+    return h("div", { class: "tmr-card run" }, h("span", { class: "tmr-ic" }, icon("timer")), what ? h("span", { class: "tmr-what" }, what) : null, h("span", { class: "tmr-big", "data-tkey": key }, fmtClock((t.end - Date.now()) / 1000)),
+      h("button", { class: "tmr-stop", onclick: () => stopTimer(t.id) }, "Abbrechen"));
+  });
+}
+function cookSide(c, st) {
+  const side = [stepIngLine(c.r, st.text, c.f, "cook-step-ings", st.links), ...cookTimerCards(c, st)].filter(Boolean);
+  return side.length ? h("div", { class: "cook-side" }, side) : null;
+}
 function drawCook() {
   const c = state.cook; if (!c) return;
   let el = document.getElementById("cook");
@@ -1160,7 +1298,7 @@ function drawCook() {
   const main = c.step < 0
     ? [h("div", { class: "cook-label" }, "Zutaten bereitlegen" + (c.r.servings ? " · " + servLabel(c.r, Math.round(c.r.servings * c.f)) : "")),
        h("ul", { class: "cook-ings" }, (c.r.ingredients || []).map(i => i.section ? h("li", null, h("span", { class: "cook-label" }, i.section)) : h("li", null, h("b", null, [fmtQty(i.qty != null ? i.qty * c.f : null), i.unit].filter(Boolean).join(" ")), " ", i.name)))]
-    : [h("div", { class: "cook-label" }, (steps[c.step].sec ? steps[c.step].sec + " · " : "") + "Schritt " + (c.step + 1) + " von " + steps.length), h("p", { class: "cook-text" }, linkedText(steps[c.step].text)), stepIngLine(c.r, steps[c.step].text, c.f, "cook-step-ings", steps[c.step].links)];
+    : [h("div", { class: "cook-label" }, (steps[c.step].sec ? steps[c.step].sec + " · " : "") + "Schritt " + (c.step + 1) + " von " + steps.length), h("p", { class: "cook-text" }, linkedText(steps[c.step].text)), cookSide(c, steps[c.step])];
   el.replaceChildren(
     h("div", { class: "cook-top" }, h("h2", null, c.r.title), h("button", { class: "btn", onclick: closeCook }, "Beenden")),
     h("div", { class: "cook-progress", "aria-hidden": "true" }, h("div", { style: "width:" + Math.round(pos / total * 100) + "%" })),
@@ -1170,6 +1308,7 @@ function drawCook() {
       c.step < steps.length - 1
         ? h("button", { class: "btn primary", onclick: () => { c.step++; drawCook(); } }, c.step < 0 ? "Los geht's →" : "Weiter →")
         : h("button", { class: "btn primary", onclick: closeCook }, "Fertig ✓")));
+  drawTimers();
 }
 document.addEventListener("keydown", e => {
   const c = state.cook; if (!c) return;
