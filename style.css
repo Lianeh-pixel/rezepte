@@ -520,3 +520,7 @@ a.rlink::after { content: " ›"; text-decoration: none; display: inline-block; 
 .wrap.full .d-sheet { flex: 1 0 auto; width: 100%; }
 /* Beim Überziehen (Gummiband-Effekt auf iPad/iPhone) läuft die Karte unten weiter */
 .wrap.full .d-sheet { box-shadow: 0 -8px 40px rgba(0, 0, 0, .18), 0 50vh 0 0 var(--bg); }
+/* Unterer Bildschirmrand: Karte schließt immer bündig ab (auch unter der Navigationsleiste) */
+.d-foot { position: fixed; left: 0; right: 0; margin: 0 auto; bottom: -120px; height: calc(200px + env(safe-area-inset-bottom, 0px)); max-width: 760px; background: var(--bg); z-index: -1; pointer-events: none; }
+@media (min-width: 760px) { .d-foot { max-width: 980px; } }
+@media (min-width: 1000px) { .d-foot { max-width: 1080px; } }

@@ -531,6 +531,7 @@ function renderDetail(id) {
   }
 
   app.append(h("div", { class: "d-blur", "aria-hidden": "true", style: "background-image:url('" + String(catImage(r.category)).replace(/'/g, "%27") + "')" }));
+  app.append(h("div", { class: "d-foot", "aria-hidden": "true" }));
   app.append(hero, h("div", { class: "d-sheet" },
     h("div", { class: "grab", "aria-hidden": "true" }),
     r.category ? h("div", { class: "sec" }, r.category) : null,
