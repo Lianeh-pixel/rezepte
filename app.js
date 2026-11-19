@@ -94,7 +94,7 @@ function fmtQty(q) {
 // Kategorien sortieren: "Ohne Kategorie" und "Draft" immer ganz unten
 function catRank(c) { const n = String(c || "").trim().toLowerCase(); return n === "draft" ? 2 : n === "ohne kategorie" ? 1 : 0; }
 // Reihenfolge nach Verzehr: Frühstück, Vorspeise, Hauptgang mit Saucen und Grundrezepten, Nachtisch, Kaffee
-const CAT_ORDER = [/^brot|brötchen|frühstück/, /suppe|eintopf|vorspeise|salat/, /haupt/, /sauce|soße|dip/, /grund|basis|beilage/, /dessert|nachtisch/, /kuchen|gebäck|torte/, /kekse|plätzchen|cookies/];
+const CAT_ORDER = [/^brot|brötchen|frühstück|^teig|grund|basis/, /suppe|eintopf|vorspeise|salat/, /haupt|beilage/, /sauce|soße|dip/, /dessert|nachtisch/, /kuchen|gebäck|torte/, /kekse|plätzchen|cookies/];
 function catPos(c) { const k = String(c || "").toLowerCase(); const i = CAT_ORDER.findIndex(re => re.test(k)); return i < 0 ? CAT_ORDER.length : i; }
 function catCmp(a, b) { return catRank(a) - catRank(b) || catPos(a) - catPos(b) || String(a).localeCompare(String(b), "de"); }
 function consolidate(list) {
