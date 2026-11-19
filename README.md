@@ -18,4 +18,4 @@ Lias persönliche Rezepte-App. Läuft im Browser auf iPad, Handy und PC und läs
 - Daten: Supabase-Projekt `rezeptbuch` (Tabellen `recipes`, `foods`, privater Speicher `photos`). Zugriff nur nach Login, jede Zeile gehört genau einem Konto (Row Level Security).
 - `config.js` enthält nur den öffentlichen Schlüssel. Der ist absichtlich öffentlich; die Daten schützt der Login.
 - Bibliotheken liegen in `vendor/` (supabase-js 2.118.0, jsPDF 4.2.1).
-- Nach Änderungen an App-Dateien die `VERSION` in `sw.js` erhöhen, damit installierte Apps das Update laden.
+- Nach Änderungen an App-Dateien die `VERSION` in `sw.js` und das `?v=` in `index.html` erhöhen. Die App lädt neue Versionen dann beim nächsten Öffnen automatisch.

@@ -673,14 +673,17 @@ document.addEventListener("touchend", e => {
 // ---------- PDF ----------
 function safeName(s) { return (s || "Rezept").replace(/[\\/:*?"<>|]+/g, " ").trim().slice(0, 80) || "Rezept"; }
 function pdfText(s) { return String(s || "").replace(/⅓/g, "1/3").replace(/⅔/g, "2/3").replace(/⅛/g, "1/8").replace(/[“”„]/g, '"').replace(/[–—]/g, "-").replace(/→/g, "-").replace(/[^\x00-\xFF€]/g, ""); }
-async function imgData(src) {
+async function imgData(src, aspect) {
   try {
     const res = await fetch(src); if (!res.ok) return null;
     const bmp = await createImageBitmap(await res.blob());
-    const c = document.createElement("canvas"), s = Math.min(1, 1000 / Math.max(bmp.width, bmp.height));
-    c.width = Math.round(bmp.width * s); c.height = Math.round(bmp.height * s);
-    c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
-    return { data: c.toDataURL("image/jpeg", 0.85), w: c.width, h: c.height };
+    // Ausschnitt im festen Seitenverhältnis (wie ein Foto im Kochbuch)
+    let sw = bmp.width, sh = bmp.height, sx = 0, sy = 0;
+    if (aspect) { if (sw / sh > aspect) { sw = sh * aspect; sx = (bmp.width - sw) / 2; } else { sh = sw / aspect; sy = (bmp.height - sh) / 2; } }
+    const c = document.createElement("canvas"), s = Math.min(1, 1600 / sw);
+    c.width = Math.round(sw * s); c.height = Math.round(sh * s);
+    c.getContext("2d").drawImage(bmp, sx, sy, sw, sh, 0, 0, c.width, c.height);
+    return { data: c.toDataURL("image/jpeg", 0.88), w: c.width, h: c.height };
   } catch (e) { return null; }
 }
 async function exportPdf(recipes, filename) {
@@ -688,56 +691,131 @@ async function exportPdf(recipes, filename) {
   toast("PDF wird erstellt …");
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: "mm", format: "a4" });
-  const W = 210, M = 18, CW = W - 2 * M, BOTTOM = 280;
-  const green = [47, 107, 74], grey = [92, 106, 98];
-  let y;
-  const need = hg => { if (y + hg > BOTTOM) { doc.addPage(); y = M; } };
-  const para = (text, size, o) => {
-    o = o || {};
-    doc.setFont("helvetica", o.bold ? "bold" : "normal"); doc.setFontSize(size); doc.setTextColor(...(o.color || [29, 36, 32]));
-    const lines = doc.splitTextToSize(pdfText(text), o.width || CW), lh = size * 0.42;
-    lines.forEach(l => { need(lh); doc.text(l, o.x || M, y); y += lh; });
+  const PW = 210, PH = 297, M = 20, CW = PW - 2 * M, BOTTOM = PH - 22;
+  const INK = [33, 33, 30], GREEN = [47, 107, 74], GREY = [110, 110, 104], RULE = [200, 196, 186];
+  const PT = 0.3528; // mm pro Punkt
+  let y = M;
+  const font = (fam, style, size, color) => { doc.setFont(fam, style); doc.setFontSize(size); doc.setTextColor(...(color || INK)); };
+  const wrap = (text, width) => doc.splitTextToSize(pdfText(text), width);
+  // schreibt Zeilen ab Oberkante y, gibt neue Oberkante zurück
+  const lines = (ls, x, top, size, lh, opts) => { ls.forEach((l, i) => doc.text(l, x, top + size * PT * 0.8 + i * lh, opts || {})); return top + ls.length * lh; };
+  const newPage = () => { doc.addPage(); y = M; };
+  const ensure = hgt => { if (y + hgt > BOTTOM) newPage(); };
+  const ornament = (cy, w) => {
+    doc.setDrawColor(...RULE); doc.setLineWidth(0.3);
+    doc.line(PW / 2 - w, cy, PW / 2 - 3, cy); doc.line(PW / 2 + 3, cy, PW / 2 + w, cy);
+    doc.setFillColor(...GREEN); doc.lines([[1.6, 1.6], [1.6, -1.6], [-1.6, -1.6], [-1.6, 1.6]], PW / 2 - 1.6, cy, [1, 1], "F", true);
   };
+  const heading = (text, x, top, width) => {
+    font("times", "bold", 14, GREEN); doc.text(pdfText(text), x, top + 14 * PT * 0.8);
+    doc.setDrawColor(...RULE); doc.setLineWidth(0.3); doc.line(x, top + 7, x + width, top + 7);
+    return top + 10;
+  };
+
   for (let n = 0; n < recipes.length; n++) {
     const r = recipes[n];
-    if (n > 0) doc.addPage();
+    if (n > 0) newPage();
     y = M + 4;
-    if (r.category) { para(r.category.toUpperCase(), 9, { bold: true, color: green }); y += 1; }
-    para(r.title, 22, { bold: true }); y += 2;
-    const facts = [r.servings ? r.servings + " Portionen" : "", r.prep_min ? "Vorbereitung " + fmtMin(r.prep_min) : "", r.cook_min ? "Kochen/Backen " + fmtMin(r.cook_min) : "", (r.tags || []).join(", ")].filter(Boolean).join("   ·   ");
-    if (facts) { para(facts, 10, { color: grey }); y += 2; }
+    // Kopf
+    if (r.category) { font("helvetica", "bold", 8, GREEN); doc.text(pdfText(r.category.toUpperCase()), PW / 2, y + 3, { align: "center", charSpace: 0.9 }); y += 7; }
+    font("times", "bold", 28, INK);
+    y = lines(wrap(r.title, CW - 10), PW / 2, y, 28, 11, { align: "center" }) + 2;
+    ornament(y + 1, 22); y += 7;
+    const facts = [r.servings ? r.servings + (r.servings === 1 ? " Portion" : " Portionen") : "", r.prep_min ? "Vorbereitung " + fmtMin(r.prep_min) : "", r.cook_min ? "Kochen/Backen " + fmtMin(r.cook_min) : ""].filter(Boolean).join("   ·   ");
+    if (facts) { font("times", "italic", 11, GREY); y = lines(wrap(facts, CW), PW / 2, y, 11, 5, { align: "center" }) + 4; }
+    // Spalten vorbereiten
+    const LW = 56, GAP = 9, RX = M + LW + GAP, RW = CW - LW - GAP, QW = 17;
+    const ing = (r.ingredients || []);
+    font("times", "normal", 11);
+    const ingRows = ing.map(i => i.section ? { sec: pdfText(i.section) } : { q: pdfText([fmtQty(i.qty), i.unit].filter(Boolean).join(" ")), name: wrap(i.name, LW - QW - 2) });
+    const stepRows = (r.steps || []).map(s => wrap(s, RW - 8));
+    const nut = ing.some(i => !i.section) ? computeNutrition(r) : null;
+    const ingH = 10 + ingRows.reduce((s, x) => s + (x.sec ? 7 : x.name.length * 4.8 + 1.2), 0) + (nut ? 50 : 0);
+    const stepH = stepRows.length ? 10 + stepRows.reduce((s, ls) => s + ls.length * 5.2 + 3, 0) : 0;
+    // Foto: so hoch, dass Zutaten und Zubereitung möglichst noch auf dieselbe Seite passen
+    font("times", "italic", 11, GREY);
+    const noteLines = r.notes ? wrap(r.notes, CW - 20) : [];
+    const noteH = noteLines.length ? noteLines.length * 5 + 5 : 0;
     const src = photoSrc(r);
     if (src) {
-      const im = await imgData(src);
-      if (im) { const ih = Math.min(95, CW * im.h / im.w), iw = ih * im.w / im.h; need(ih + 4); doc.addImage(im.data, "JPEG", M, y, iw, ih); y += ih + 6; }
+      const full = CW * 9 / 16, contentH = Math.max(ingH, stepH);
+      let ih = Math.min(full, BOTTOM - y - noteH - contentH - 7);
+      if (ih < 60) ih = full;
+      const im = await imgData(src, CW / ih);
+      if (im) { ensure(ih + 6); doc.addImage(im.data, "JPEG", M, y, CW, ih); y += ih + 7; }
     }
-    if (r.notes) { para(r.notes, 10.5, { color: grey }); y += 3; }
-    if ((r.ingredients || []).length) {
-      need(12); para("Zutaten", 14, { bold: true, color: green }); y += 1;
-      r.ingredients.forEach(i => {
-        if (i.section) { y += 1.5; para(i.section, 10.5, { bold: true }); return; }
-        need(5);
-        doc.setFont("helvetica", "bold"); doc.setFontSize(10.5); doc.setTextColor(29, 36, 32);
-        doc.text(pdfText([fmtQty(i.qty), i.unit].filter(Boolean).join(" ")), M + 24, y, { align: "right" });
-        para(i.name, 10.5, { x: M + 28, width: CW - 28 }); y += 0.6;
+    if (noteLines.length) { font("times", "italic", 11, GREY); ensure(noteH); y = lines(noteLines, PW / 2, y, 11, 5, { align: "center" }) + 5; }
+
+    const drawIngredients = (x, top, width, qw) => {
+      let yy = heading("Zutaten", x, top, width);
+      ingRows.forEach(row => {
+        if (row.sec) { yy += 2; font("helvetica", "bold", 7.5, GREEN); doc.text(row.sec.toUpperCase(), x, yy + 2.6, { charSpace: 0.6 }); yy += 5; return; }
+        if (yy + row.name.length * 4.8 > BOTTOM) { newPage(); yy = y; }
+        font("times", "bold", 11, INK); doc.text(row.q, x + qw - 1, yy + 11 * PT * 0.8, { align: "right" });
+        font("times", "normal", 11, INK); yy = lines(row.name, x + qw + 1.5, yy, 11, 4.8) + 1.2;
       });
-      y += 4;
-    }
-    if ((r.steps || []).length) {
-      need(12); para("Zubereitung", 14, { bold: true, color: green }); y += 1;
-      r.steps.forEach((s, k) => {
-        need(6);
-        doc.setFont("helvetica", "bold"); doc.setFontSize(10.5); doc.setTextColor(...green);
-        doc.text(String(k + 1) + ".", M, y);
-        para(s, 10.5, { x: M + 8, width: CW - 8 }); y += 2;
+      return yy;
+    };
+    const drawNutrition = (x, top, width) => {
+      let yy = top + 6;
+      if (yy + 46 > BOTTOM) { newPage(); yy = y; }
+      font("times", "bold", 11, GREEN); doc.text(r.servings ? "Nährwerte pro Portion" : "Nährwerte gesamt", x, yy + 3); yy += 5.5;
+      const rows = [["Brennwert", fmtNut(nut.per.kcal, "kcal") + " kcal"], ["Fett", fmtNut(nut.per.fat, "fat") + " g"], ["Kohlenhydrate", fmtNut(nut.per.carbs, "carbs") + " g"], ["  davon Zucker", fmtNut(nut.per.sugar, "sugar") + " g"], ["Eiweiß", fmtNut(nut.per.protein, "protein") + " g"], ["Ballaststoffe", fmtNut(nut.per.fiber, "fiber") + " g"], ["Salz", fmtNut(nut.per.salt, "salt") + " g"]];
+      doc.setDrawColor(...RULE); doc.setLineWidth(0.25);
+      rows.forEach(([a, b], i) => {
+        font("times", i === 3 ? "italic" : "normal", 9.5, i === 3 ? GREY : INK);
+        doc.text(pdfText(a.trim()), x + (i === 3 ? 3 : 0), yy + 3.2); doc.text(pdfText(b), x + width, yy + 3.2, { align: "right" });
+        doc.line(x, yy + 4.6, x + width, yy + 4.6); yy += 5;
       });
+      font("times", "italic", 8, GREY); doc.text("Schätzwerte", x, yy + 3.2);
+      return yy + 5;
+    };
+    const drawSteps = (x, top, width) => {
+      let yy = heading("Zubereitung", x, top, width);
+      stepRows.forEach((ls, k) => {
+        if (yy + Math.min(ls.length, 2) * 5.2 > BOTTOM) { newPage(); yy = y; }
+        font("times", "bold", 12, GREEN); doc.text(String(k + 1), x, yy + 11 * PT * 0.8);
+        font("times", "normal", 11, INK);
+        ls.forEach(l => { if (yy + 5.2 > BOTTOM) { newPage(); yy = y; } doc.text(l, x + 8, yy + 11 * PT * 0.8); yy += 5.2; });
+        yy += 3;
+      });
+      return yy;
+    };
+
+    const twoCol = stepRows.length && ingRows.length && Math.max(ingH, stepH) <= BOTTOM - y;
+    const fitsFresh = stepRows.length && ingRows.length && Math.max(ingH, stepH) <= BOTTOM - M;
+    if (!twoCol && fitsFresh && y > M + 120) newPage();
+    if ((twoCol || fitsFresh) && stepRows.length && ingRows.length) {
+      const top = y, startPage = doc.getNumberOfPages();
+      let yl = drawIngredients(M, top, LW, QW);
+      const ingPage = doc.getNumberOfPages();
+      doc.setPage(startPage); y = top;
+      let yr = drawSteps(RX, top, RW);
+      const stepPage = doc.getNumberOfPages();
+      const lastPage = Math.max(ingPage, stepPage);
+      if (ingPage === startPage && stepPage === startPage) {
+        doc.setDrawColor(...RULE); doc.setLineWidth(0.25); doc.line(M + LW + GAP / 2, top + 2, M + LW + GAP / 2, Math.max(yl, yr) - 2);
+      }
+      if (nut) {
+        if (ingPage === startPage && stepPage === startPage && yl + 52 <= BOTTOM) { doc.setPage(startPage); yl = drawNutrition(M, yl, LW); }
+        else if (stepPage === lastPage && yr + 52 <= BOTTOM) { doc.setPage(lastPage); yr = drawNutrition(RX, yr, 70); }
+        else { doc.setPage(lastPage); y = M; newPage(); yl = drawNutrition(M, M - 6, LW); yr = 0; }
+      }
+      doc.setPage(doc.getNumberOfPages());
+      y = Math.max(ingPage === doc.getNumberOfPages() ? yl : 0, stepPage === doc.getNumberOfPages() ? yr : 0, yl, yr);
+    } else {
+      if (ingRows.length) { ensure(20); y = drawIngredients(M, y, CW, 22) + 4; }
+      if (stepRows.length) { ensure(20); y = drawSteps(M, y, CW) + 2; }
+      if (nut) y = drawNutrition(M, y, 70);
     }
-    if ((r.ingredients || []).some(i => !i.section)) {
-      const nn = computeNutrition(r);
-      y += 4; need(14); para(r.servings ? "Nährwerte pro Portion (geschätzt)" : "Nährwerte gesamt (geschätzt)", 12, { bold: true, color: green });
-      para(NUT.map(([k, label, unit]) => label + " " + fmtNut(nn.per[k], k) + unit).join("   ·   "), 10);
-    }
-    if (r.source) { y += 3; para("Quelle: " + r.source, 9, { color: grey }); }
+    if (r.source) { font("times", "italic", 9.5, GREY); ensure(8); y += 4; doc.text(pdfText("Quelle: " + r.source), PW / 2, y + 3, { align: "center", maxWidth: CW }); }
+  }
+  // Fußzeile
+  const pages = doc.getNumberOfPages();
+  for (let p = 1; p <= pages; p++) {
+    doc.setPage(p);
+    doc.setDrawColor(...RULE); doc.setLineWidth(0.25); doc.line(PW / 2 - 10, PH - 14, PW / 2 + 10, PH - 14);
+    font("times", "italic", 9, GREY); doc.text(pages > 1 ? String(p) : "Rezeptbuch", PW / 2, PH - 9.5, { align: "center" });
   }
   const blob = doc.output("blob");
   const file = new File([blob], filename, { type: "application/pdf" });
@@ -754,7 +832,15 @@ async function exportPdf(recipes, filename) {
 // ---------- boot ----------
 window.addEventListener("online", () => { state.online = true; loadAll(); render(); });
 window.addEventListener("offline", () => { state.online = false; render(); });
-if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
+if ("serviceWorker" in navigator && location.protocol === "https:") {
+  navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then(reg => {
+    reg.update().catch(() => {});
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") reg.update().catch(() => {}); });
+  }).catch(() => {});
+  // Neue Version aktiv: einmal neu laden, damit die neuen Dateien greifen
+  let reloaded = false; const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener("controllerchange", () => { if (hadController && !reloaded && !state.cook && state.route.view !== "edit") { reloaded = true; location.reload(); } });
+}
 state.route = readHash();
 initAuth();
 })();
