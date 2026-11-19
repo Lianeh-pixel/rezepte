@@ -405,7 +405,7 @@ function renderList() {
         h("img", { class: "logo-l", src: "icons/icon.svg", alt: "", width: "36", height: "36" }), h("img", { class: "logo-d", src: "icons/icon-dark.svg", alt: "", width: "36", height: "36" })),
       menuOpen ? h("div", { class: "h-menu", role: "menu" },
         h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; render(); shareApp(); } }, "Rezeptbuch teilen"),
-        state.recipes.length ? h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; render(); exportPdf(state.recipes, "Rezeptbuch.pdf"); } }, "Alle in einer PDF") : null,
+        state.recipes.length ? h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; render(); exportPdf(sortedForPdf(), "Rezeptbuch.pdf", true); } }, "Alle in einer PDF") : null,
         state.recipes.length ? h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; render(); exportPdfEach(sortedForPdf()); } }, "Alle als einzelne PDFs") : null,
         isGuest() ? h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; go("anmelden"); } }, "Anmelden")
           : h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; logout(); } }, "Abmelden")) : null)));
@@ -1403,7 +1403,7 @@ async function imgData(src, aspect) {
     return { data: c.toDataURL("image/jpeg", 0.88), w: c.width, h: c.height };
   } catch (e) { return null; }
 }
-async function buildPdf(recipes) {
+async function buildPdf(recipes, book) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const PW = 210, PH = 297, M = 20, CW = PW - 2 * M, BOTTOM = PH - 22;
@@ -1427,9 +1427,33 @@ async function buildPdf(recipes) {
     return top + 10;
   };
 
+  // Buch: Titelseite und Inhaltsverzeichnis
+  const starts = [];
+  let tocPages = 0;
+  if (book) {
+    // feine Strichzeichnung: Topf mit drei Dampflinien
+    const cx = PW / 2;
+    doc.setDrawColor(...GREEN); doc.setLineWidth(0.8); doc.setLineCap("round"); doc.setLineJoin("round");
+    doc.line(cx - 24, 116, cx + 24, 116);
+    doc.lines([[0, 10], [0, 4, 2.5, 7, 7, 7], [20, 0], [4.5, 0, 7, -3, 7, -7], [0, -10]], cx - 17, 116, [1, 1], "S", false);
+    doc.line(cx - 24, 120, cx - 17, 120); doc.line(cx + 17, 120, cx + 24, 120);
+    [-9, 0, 9].forEach(dx => doc.lines([[-3, -3, 3, -6, 0, -9], [-3, -3, 3, -6, 0, -9]], cx + dx, 109, [1, 1], "S", false));
+    doc.setLineCap("butt");
+    font("times", "bold", 46, INK); doc.text("Rezeptbuch", PW / 2, 160, { align: "center" });
+    ornament(171, 30);
+    font("times", "italic", 13, GREY);
+    doc.text(recipes.length + (recipes.length === 1 ? " Rezept" : " Rezepte"), PW / 2, 184, { align: "center" });
+    const d = new Date(); doc.text(pdfText(d.toLocaleDateString("de-DE", { month: "long", year: "numeric" })), PW / 2, 191, { align: "center" });
+    const cats = new Set(recipes.map(r => r.category || "Ohne Kategorie"));
+    const rows = recipes.length + cats.size * 2;
+    const perPage = Math.floor((BOTTOM - (M + 30)) / 8.6);
+    tocPages = Math.max(1, Math.ceil(rows / perPage));
+    for (let i = 0; i < tocPages; i++) doc.addPage();
+  }
   for (let n = 0; n < recipes.length; n++) {
     const r = recipes[n];
-    if (n > 0) newPage();
+    if (n > 0 || book) newPage();
+    starts[n] = doc.getNumberOfPages();
     y = M + 4;
     // Kopf
     if (r.category) { font("helvetica", "bold", 8, GREEN); doc.text(pdfText(r.category.toUpperCase()), PW / 2, y + 3, { align: "center", charSpace: 0.9 }); y += 7; }
@@ -1557,9 +1581,34 @@ async function buildPdf(recipes) {
     }
     if (r.source) { font("times", "italic", 9.5, GREY); ensure(8); y += 4; doc.text(pdfText("Quelle: " + r.source), PW / 2, y + 3, { align: "center", maxWidth: CW }); }
   }
+  if (book) {
+    // Inhaltsverzeichnis auf den reservierten Seiten
+    let pg = 2; doc.setPage(pg); y = M + 6;
+    font("times", "bold", 30, INK); doc.text("Inhalt", PW / 2, y + 8, { align: "center" }); y += 14;
+    ornament(y, 22); y += 12;
+    let last = null;
+    const next = need => { if (y + need > BOTTOM && pg < 1 + tocPages) { pg++; doc.setPage(pg); y = M + 6; } };
+    recipes.forEach((r, n) => {
+      const c = r.category || "Ohne Kategorie";
+      if (c !== last) {
+        next(18); if (last !== null) y += 4;
+        font("helvetica", "bold", 10.5, GREEN); doc.text(pdfText(c.toUpperCase()), M, y + 4, { charSpace: 1 }); y += 10; last = c;
+      }
+      next(8.6);
+      const pn = String(starts[n]);
+      font("times", "normal", 14.5, INK);
+      const t = doc.splitTextToSize(pdfText(r.title), CW - 30)[0];
+      doc.text(t, M, y + 5); doc.text(pn, PW - M, y + 5, { align: "right" });
+      const tw = doc.getTextWidth(t), nw = doc.getTextWidth(pn);
+      doc.setDrawColor(...RULE); doc.setLineWidth(0.25); doc.setLineDashPattern([0.4, 1.2], 0);
+      doc.line(M + tw + 2, y + 4.6, PW - M - nw - 2, y + 4.6); doc.setLineDashPattern([], 0);
+      doc.link(M, y - 0.5, CW, 7.5, { pageNumber: starts[n] });
+      y += 8.6;
+    });
+  }
   // Fußzeile
   const pages = doc.getNumberOfPages();
-  for (let p = 1; p <= pages; p++) {
+  for (let p = book ? 2 : 1; p <= pages; p++) {
     doc.setPage(p);
     doc.setDrawColor(...RULE); doc.setLineWidth(0.25); doc.line(PW / 2 - 10, PH - 14, PW / 2 + 10, PH - 14);
     font("times", "italic", 9, GREY); doc.text(pages > 1 ? String(p) : "Rezeptbuch", PW / 2, PH - 9.5, { align: "center" });
@@ -1572,10 +1621,10 @@ function download(blob, filename) {
   document.body.append(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 10000);
 }
-async function exportPdf(recipes, filename) {
+async function exportPdf(recipes, filename, book) {
   if (!window.jspdf) { toast("PDF-Export lädt noch. Bitte gleich noch einmal tippen."); return; }
   toast("PDF wird erstellt …");
-  const blob = await buildPdf(recipes);
+  const blob = await buildPdf(recipes, book);
   const file = new File([blob], filename, { type: "application/pdf" });
   // Auf iPad/iPhone öffnet das Teilen-Menü (Sichern in Dateien, Drucken, AirDrop); sonst normaler Download
   if (navigator.canShare && navigator.canShare({ files: [file] }) && isMobile()) {
