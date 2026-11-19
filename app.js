@@ -227,7 +227,7 @@ window.addEventListener("hashchange", onRoute);
 function render() {
   if (state.route.view !== "edit") { const ae = document.activeElement; if (ae && ae.id === "q") state._keepSearchFocus = ae.selectionStart; }
   app.replaceChildren();
-  app.classList.remove("full");
+  app.classList.remove("full", "home");
   if (!state.authReady) { app.append(h("div", { class: "empty" }, h("h2", null, "Wird geladen …"))); return; }
   if (state.route.view === "newpw" && state.user) return renderNewPassword();
   if (!state.user) return renderLogin();
@@ -239,57 +239,57 @@ function render() {
 const searchIcon = () => { const s = document.createElementNS("http://www.w3.org/2000/svg", "svg"); s.setAttribute("width", "18"); s.setAttribute("height", "18"); s.setAttribute("viewBox", "0 0 24 24"); s.setAttribute("fill", "none"); s.setAttribute("stroke", "currentColor"); s.setAttribute("stroke-width", "2.2"); s.innerHTML = '<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4" stroke-linecap="round"/>'; return s; };
 
 function renderList() {
-  app.append(h("div", { class: "top" },
-    h("div", { class: "brand" }, h("h1", null, "Rezeptbuch"),
-      state.loaded ? h("span", { class: "count" }, state.recipes.length + (state.recipes.length === 1 ? " Rezept" : " Rezepte")) : null,
-      !state.online ? h("span", { class: "offline" }, "offline") : null),
-    h("div", { class: "actions" },
-      state.recipes.length ? h("button", { class: "btn", onclick: () => exportPdf(state.recipes, "Rezeptbuch.pdf") }, "Alle als PDF") : null,
-      h("button", { class: "btn ghost", onclick: logout }, "Abmelden"),
-      h("button", { class: "btn primary", onclick: () => go("neu"), disabled: !state.online }, "+ Neues Rezept"))));
+  app.classList.add("home");
+  const menuOpen = !!state.menuOpen;
+  app.append(h("div", { class: "h-head" },
+    h("h1", null, "Rezeptbuch"),
+    h("div", { class: "h-tools" },
+      !state.online ? h("span", { class: "offline" }, "offline") : null,
+      h("button", { class: "h-menu-btn", "aria-label": "Menü", "aria-expanded": menuOpen ? "true" : "false", onclick: () => { state.menuOpen = !menuOpen; render(); } },
+        h("img", { src: "icons/icon.svg", alt: "", width: "36", height: "36" })),
+      menuOpen ? h("div", { class: "h-menu", role: "menu" },
+        h("button", { role: "menuitemcheckbox", "aria-checked": state.favOnly ? "true" : "false", onclick: () => { state.favOnly = !state.favOnly; state.menuOpen = false; render(); } }, state.favOnly ? "Alle Rezepte zeigen" : "Nur Favoriten zeigen"),
+        state.recipes.length ? h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; render(); exportPdf(state.recipes, "Rezeptbuch.pdf"); } }, "Alle als PDF") : null,
+        h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; logout(); } }, "Abmelden")) : null)));
   if (state.loadError) app.append(h("div", { class: "notice" }, state.loadError));
   if (!state.loaded) { app.append(h("div", { class: "empty" }, h("h2", null, "Rezepte werden geladen …"))); return; }
   if (!state.recipes.length) {
     app.append(h("div", { class: "empty" },
       h("h2", null, "Noch keine Rezepte"),
-      h("p", null, "Leg dein erstes Rezept an: Zutaten, Schritte und ein Foto. Es erscheint dann auf all deinen Geräten."),
+      h("p", null, "Leg dein erstes Rezept an. Es erscheint dann auf all deinen Geräten."),
       h("button", { class: "btn primary", onclick: () => go("neu") }, "+ Erstes Rezept anlegen")));
     return;
   }
-  const input = h("input", { id: "q", type: "search", placeholder: "Suche nach Rezept, Zutat oder Tag", value: state.query, autocomplete: "off", "aria-label": "Rezepte durchsuchen" });
+  const input = h("input", { id: "q", type: "search", placeholder: "Suchen", value: state.query, autocomplete: "off", "aria-label": "Rezepte durchsuchen" });
   input.addEventListener("input", () => { state.query = input.value; renderGridOnly(); });
   app.append(h("div", { class: "search" }, searchIcon(), input));
-  const chips = h("div", { class: "chips", role: "toolbar", "aria-label": "Filter" });
-  const chip = (label, pressed, onclick, cls) => h("button", { class: "chip" + (cls ? " " + cls : ""), "aria-pressed": pressed ? "true" : "false", onclick }, label);
-  chips.append(chip("Alle", !state.cat && !state.favOnly, () => { state.cat = ""; state.favOnly = false; render(); }));
-  chips.append(chip("★ Favoriten", state.favOnly, () => { state.favOnly = !state.favOnly; render(); }, "fav"));
-  const seen = new Set();
-  [...categories(), ...allTags()].forEach(c => { if (seen.has(c)) return; seen.add(c); chips.append(chip(c, state.cat === c, () => { state.cat = state.cat === c ? "" : c; render(); })); });
-  app.append(chips, h("div", { id: "gridhost" }));
+  if (state.favOnly) app.append(h("div", { class: "h-filter" }, "Nur Favoriten", h("button", { onclick: () => { state.favOnly = false; render(); } }, "Alle zeigen")));
+  app.append(h("div", { id: "gridhost" }));
   renderGridOnly();
+  app.append(h("button", { class: "fab", "aria-label": "Neues Rezept", onclick: () => go("neu"), disabled: !state.online }, "+"));
   if (state._keepSearchFocus != null) { input.focus(); try { input.setSelectionRange(state._keepSearchFocus, state._keepSearchFocus); } catch (e) {} state._keepSearchFocus = null; }
 }
 function renderGridOnly() {
   const host = document.getElementById("gridhost"); if (!host) return;
   const list = filtered();
-  if (!list.length) { host.replaceChildren(h("div", { class: "empty" }, h("h2", null, "Nichts gefunden"), h("p", null, "Versuch einen anderen Suchbegriff oder setz die Filter zurück."))); return; }
-  host.replaceChildren(h("div", { class: "grid" }, list.map(card)));
+  if (!list.length) { host.replaceChildren(h("div", { class: "empty" }, h("h2", null, "Nichts gefunden"), h("p", null, state.favOnly ? "Unter deinen Favoriten passt nichts. Tipp oben auf „Alle zeigen“." : "Versuch einen anderen Suchbegriff."))); return; }
+  const groups = new Map();
+  list.forEach(r => { const c = r.category || "Ohne Kategorie"; if (!groups.has(c)) groups.set(c, []); groups.get(c).push(r); });
+  const names = [...groups.keys()].sort((a, b) => a === "Ohne Kategorie" ? 1 : b === "Ohne Kategorie" ? -1 : a.localeCompare(b, "de"));
+  host.replaceChildren(h("div", { class: "toc" }, names.map(c => {
+    const rs = groups.get(c).sort((a, b) => a.title.localeCompare(b.title, "de"));
+    return h("section", null,
+      h("h2", { class: "chap" }, c, h("span", null, rs.length + (rs.length === 1 ? " Rezept" : " Rezepte"))),
+      h("ul", null, rs.map(r => {
+        const time = (r.prep_min || 0) + (r.cook_min || 0);
+        return h("li", null, h("a", { href: "#rezept-" + r.id, class: "ln" },
+          h("span", { class: "t" }, r.title || "Ohne Titel", r.favorite ? h("span", { class: "fav-dot", "aria-label": "Favorit" }, icon("heart", true)) : null),
+          h("span", { class: "dots", "aria-hidden": "true" }),
+          h("span", { class: "tm" }, time ? fmtMin(time) : "")));
+      })));
+  })));
 }
-function thumb(r) {
-  const src = photoSrc(r);
-  return h("div", { class: "thumb" },
-    src ? h("img", { src, alt: "", loading: "lazy" }) : h("span", { class: "initial", "aria-hidden": "true" }, (r.title || "?").trim().charAt(0).toUpperCase()),
-    r.favorite ? h("span", { class: "star", "aria-label": "Favorit" }, "★") : null);
-}
-function card(r) {
-  const time = (r.prep_min || 0) + (r.cook_min || 0);
-  return h("button", { class: "card", onclick: () => go("rezept-" + r.id) },
-    thumb(r),
-    h("div", { class: "card-body" },
-      r.category ? h("span", { class: "tag" }, r.category) : null,
-      h("h3", null, r.title || "Ohne Titel"),
-      h("div", { class: "meta" }, time ? h("span", null, "⏱ " + fmtMin(time)) : null, r.servings ? h("span", null, r.servings + " Portionen") : null)));
-}
+document.addEventListener("click", e => { if (state.menuOpen && !e.target.closest(".h-tools")) { state.menuOpen = false; render(); } });
 
 const ICONS = {
   back: '<path d="M15 18l-6-6 6-6"/>',
@@ -437,17 +437,15 @@ function nutritionBlock(r) {
   const ings = (r.ingredients || []).filter(i => !i.section);
   if (!ings.length) return null;
   const n = computeNutrition(r);
-  const list = h("ul", { class: "nut-list" }, n.rows.map(x => h("li", { class: x.miss ? "miss" : null },
-    h("span", null, ingToLine(x.i) + (x.food && !x.miss ? " → " + x.food.label : "")),
-    h("span", null, x.miss ? x.miss : Math.round(x.g) + " g · " + Math.round(x.kcal) + " kcal"))));
-  const missNames = n.missing.filter(x => !x.food).map(x => x.i.name);
+  const rows = [["kcal", "Brennwert", " kcal"], ["fat", "Fett", " g"], ["carbs", "Kohlenhydrate", " g"], ["sugar", "davon Zucker", " g", true], ["protein", "Eiweiß", " g"], ["fiber", "Ballaststoffe", " g"], ["salt", "Salz", " g"]];
+  const missNames = n.missing.map(x => x.i.name);
   return h("section", { class: "nut" },
     h("h3", null, r.servings ? "Nährwerte pro Portion" : "Nährwerte (ganzes Rezept)"),
-    h("p", { class: "meta" }, NUT.map(([k, label, unit]) => label + " " + fmtNut(n.per[k], k) + unit).join(" · ")),
-    n.missing.length ? h("p", { class: "notice" }, n.missing.length + (n.missing.length === 1 ? " Zutat fehlt" : " Zutaten fehlen") + " in der Berechnung. Die Werte sind deshalb zu niedrig.") : null,
-    h("small", null, "Geschätzt aus der eingebauten Nährwerttabelle (Durchschnittswerte pro 100 g)."),
-    h("details", null, h("summary", null, "So wurde gerechnet"), list),
-    missNames.length && state.online ? foodFormFor(missNames) : null);
+    h("table", { class: "nut-table" }, h("tbody", null, rows.map(([k, label, unit, sub]) =>
+      h("tr", { class: sub ? "sub" : k === "kcal" ? "kcal" : null }, h("th", { scope: "row" }, label), h("td", null, fmtNut(n.per[k], k) + unit))))),
+    missNames.length ? h("p", { class: "nut-miss" }, "Nicht mitgerechnet: " + missNames.join(", ")) : null,
+    h("small", null, "Schätzwerte"),
+    n.missing.some(x => !x.food) && state.online ? foodFormFor(n.missing.filter(x => !x.food).map(x => x.i.name)) : null);
 }
 function foodFormFor(names) {
   const ff = state.foodForm;
