@@ -650,15 +650,22 @@ a.rlink::after { content: " ›"; text-decoration: none; display: inline-block; 
 }
 .tmr-info-ed { display: inline-flex; align-items: center; gap: 6px; color: var(--basil); }
 .tmr-info-ed svg { width: 18px; height: 18px; }
-/* Handy quer: Zutaten links neben dem Timer */
-@media (orientation: landscape) and (max-height: 520px) {
-  .cook-main:has(.cook-side .cook-step-ings):has(.cook-side .tmr-card) { grid-template-columns: minmax(0, 1fr) auto; column-gap: 28px; }
-  .cook-side:has(.cook-step-ings):has(.tmr-card) { flex-direction: row; align-items: center; gap: 20px; }
-  .cook-side:has(.cook-step-ings):has(.tmr-card) > * { width: auto; }
-  .cook-side:has(.tmr-card) .cook-step-ings { width: 210px; }
-  .cook-side:has(.tmr-card) .tmr-card { flex: 0 0 auto; }
-}
 /* Handy hochkant: mehr Luft zwischen Zutaten und Timer */
 @media (orientation: portrait) {
   .cook-side:has(.cook-step-ings) .tmr-card { margin-top: 28px; }
+}
+/* Quer (iPad und Handy): Zubereitung volle Breite, Zutaten als Zeile darunter, Timer rechts */
+@media (orientation: landscape) and (min-width: 640px) {
+  .cook-main:has(.cook-side) { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto auto; align-content: center; }
+  .cook-main:has(.cook-side .tmr-card) { grid-template-columns: minmax(0, 1fr) 240px; column-gap: 56px; }
+  .cook-side { display: contents; }
+  .cook-main .cook-side .cook-step-ings { grid-column: 1; grid-row: 3; align-self: start; justify-self: stretch; margin: 26px 0 0 !important; width: auto; max-width: none; background: none; border: 0; border-radius: 0; padding: 0; font-size: clamp(17px, 2vw, 22px); color: var(--muted); line-height: 1.6; }
+  .cook-main .cook-step-ings::before { content: none; }
+  .cook-main .cook-step-ings .sep { display: inline; }
+  .cook-main .cook-side .cook-step-ings .si { display: inline; border-top: 0; padding: 0; }
+  .cook-side .tmr-card { grid-column: 2; grid-row: 1 / span 3; align-self: center; width: auto; }
+}
+@media (orientation: landscape) and (max-height: 520px) {
+  .cook-main:has(.cook-side .tmr-card) { grid-template-columns: minmax(0, 1fr) 150px; column-gap: 28px; }
+  .cook-main .cook-side .cook-step-ings { margin-top: 10px !important; font-size: 15px; line-height: 1.5; }
 }
