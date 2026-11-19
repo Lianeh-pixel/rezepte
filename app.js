@@ -400,10 +400,10 @@ function renderList() {
     h("h1", null, "Rezeptbuch"),
     h("div", { class: "h-tools" },
       !state.online ? h("span", { class: "offline" }, "offline") : null,
+      h("button", { class: "h-fav" + (state.favOnly ? " on" : ""), "aria-label": state.favOnly ? "Alle Rezepte zeigen" : "Nur Favoriten zeigen", "aria-pressed": state.favOnly ? "true" : "false", onclick: () => { state.favOnly = !state.favOnly; state.menuOpen = false; render(); } }, icon("heart", state.favOnly)),
       h("button", { class: "h-menu-btn", "aria-label": "Menü", "aria-expanded": menuOpen ? "true" : "false", onclick: () => { state.menuOpen = !menuOpen; render(); } },
         h("img", { class: "logo-l", src: "icons/icon.svg", alt: "", width: "36", height: "36" }), h("img", { class: "logo-d", src: "icons/icon-dark.svg", alt: "", width: "36", height: "36" })),
       menuOpen ? h("div", { class: "h-menu", role: "menu" },
-        h("button", { role: "menuitemcheckbox", "aria-checked": state.favOnly ? "true" : "false", onclick: () => { state.favOnly = !state.favOnly; state.menuOpen = false; render(); } }, state.favOnly ? "Alle Rezepte zeigen" : "Nur Favoriten zeigen"),
         h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; render(); shareApp(); } }, "Rezeptbuch teilen"),
         state.recipes.length ? h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; render(); exportPdf(state.recipes, "Rezeptbuch.pdf"); } }, "Alle in einer PDF") : null,
         state.recipes.length ? h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; render(); exportPdfEach(sortedForPdf()); } }, "Alle als einzelne PDFs") : null,
@@ -441,7 +441,7 @@ function renderGridOnly() {
       h("ul", null, rs.map(r => {
         const time = (r.prep_min || 0) + (r.cook_min || 0);
         return h("li", null, h("a", { href: "#rezept-" + r.id, class: "ln" },
-          h("span", { class: "t" }, r.title || "Ohne Titel", r.favorite ? h("span", { class: "fav-dot", "aria-label": "Favorit" }, icon("heart", true)) : null),
+          h("span", { class: "t" }, r.title || "Ohne Titel"),
           h("span", { class: "dots", "aria-hidden": "true" }),
           h("span", { class: "tm" }, time ? fmtMin(time) : "")));
       })));
