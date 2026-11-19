@@ -15,7 +15,7 @@ const state = {
   user: null, authReady: false, authMode: "login", authMsg: "", authErr: "", authBusy: false,
   recipes: [], foods: [], loaded: false, loadError: "", online: navigator.onLine,
   query: "", cat: "", favOnly: false,
-  route: { view: "list" },
+  route: { view: "list" }, kind: (() => { try { return JSON.parse(localStorage.getItem("rb-kind")) || "alle"; } catch (e) { return "alle"; } })(),
   servings: {}, checked: {},
   confirmDelete: false, saving: false, formError: "",
   draftPhoto: null,
@@ -183,10 +183,16 @@ function photoPaths(r) { return [r.photo_path, ...(r.photos || [])].filter(Boole
 function urlFor(path) { return (state.photoUrls[path] || {}).url || ""; }
 function categories() { const s = new Set(); state.recipes.forEach(r => r.category && s.add(r.category)); return [...s].sort((a, b) => a.localeCompare(b, "de")); }
 function allTags() { const s = new Set(); state.recipes.forEach(r => (r.tags || []).forEach(t => s.add(t))); return [...s].sort((a, b) => a.localeCompare(b, "de")); }
+// Art: Gericht oder Basic (gespeichert als Suchbegriff "Basic")
+const isBasicTag = t => norm(String(t).trim()) === "basic";
+const isBasic = r => (r.tags || []).some(isBasicTag);
 function filtered() {
   const q = norm(state.query).split(/\s+/).filter(Boolean);
   return state.recipes.filter(r => {
     if (state.favOnly && !r.favorite) return false;
+    const kind = state.kind || "alle";
+    if (kind === "basics" && !isBasic(r)) return false;
+    if (kind === "gerichte" && isBasic(r)) return false;
     if (state.cat && r.category !== state.cat && !(r.tags || []).includes(state.cat)) return false;
     if (!q.length) return true;
     const hay = norm([r.title, r.category, (r.tags || []).join(" "), (r.ingredients || []).map(i => i.name || i.section).join(" "), r.notes].join(" "));
@@ -436,6 +442,10 @@ function renderList() {
   const input = h("input", { id: "q", type: "search", placeholder: "Suchen", value: state.query, autocomplete: "off", "aria-label": "Rezepte durchsuchen" });
   input.addEventListener("input", () => { state.query = input.value; renderGridOnly(); });
   app.append(h("div", { class: "search" }, searchIcon(), input));
+  const kind = state.kind || "alle";
+  if (state.recipes.some(isBasic)) app.append(h("div", { class: "kind-seg", role: "tablist", "aria-label": "Anzeigen" },
+    [["alle", "Alle"], ["gerichte", "Gerichte"], ["basics", "Basics"]].map(([k, l]) => h("button", { role: "tab", "aria-selected": kind === k ? "true" : "false", class: kind === k ? "on" : null,
+      onclick: () => { state.kind = k; lsSet("rb-kind", k); render(); } }, l))));
   if (state.favOnly) app.append(h("div", { class: "h-filter" }, "Nur Favoriten", h("button", { onclick: () => { state.favOnly = false; render(); } }, "Alle zeigen")));
   app.append(h("div", { id: "gridhost" }));
   renderGridOnly();
@@ -1047,6 +1057,11 @@ function renderForm(id) {
       fileIn].filter(Boolean));
   }
   drawPhoto();
+  let kindVal = isBasic(v) ? "basic" : "gericht";
+  const kindSeg = h("div", { class: "kind-seg f-kind" });
+  const drawKind = () => kindSeg.replaceChildren(...[["gericht", "Gericht"], ["basic", "Basic"]].map(([k, l]) =>
+    h("button", { type: "button", class: kindVal === k ? "on" : null, "aria-pressed": kindVal === k ? "true" : "false", onclick: () => { kindVal = k; drawKind(); } }, l)));
+  drawKind();
   const form = h("form", { class: "form", id: "recipe-form", novalidate: true },
     h("div", { class: "f-top" }, h("button", { type: "button", class: "btn ghost back", onclick: () => r ? go("rezept-" + r.id) : go("") }, "← Abbrechen"), camBtn),
     photoBox,
@@ -1057,7 +1072,8 @@ function renderForm(id) {
       servAsk,
       mrow("Vorbereitung", inp("f-prep", v.prep_min, { type: "number", min: "0", inputmode: "numeric", placeholder: "–" }), "Min."),
       mrow("Kochen/Backen", inp("f-cook", v.cook_min, { type: "number", min: "0", inputmode: "numeric", placeholder: "–" }), "Min."),
-      mrow("Suchbegriffe", inp("f-tags", (v.tags || []).join(", "), { placeholder: "z. B. vegan, schnell" }))),
+      mrow("Art", null, null, kindSeg),
+      mrow("Suchbegriffe", inp("f-tags", (v.tags || []).filter(t => !isBasicTag(t)).join(", "), { placeholder: "z. B. vegan, schnell" }))),
     dl,
     fld("Zutaten", ingEditor(v.ingredients || []),
       "Menge mit Einheit, z. B. 200 g oder 1 TL. Mit ≡ verschieben. Den Listennamen kannst du leer lassen, wenn es nur eine Liste gibt."),
@@ -1192,7 +1208,7 @@ async function saveRecipe(existing, form) {
   const num = s => { const n = parseInt(s, 10); return isNaN(n) || n < 0 ? null : n; };
   const data = {
     title, category: val("f-cat").trim(), servings: num(val("f-serv")), servings_unit: val("f-sunit") || "Portion", prep_min: num(val("f-prep")), cook_min: num(val("f-cook")),
-    tags: val("f-tags").split(",").map(t => t.trim()).filter(Boolean),
+    tags: val("f-tags").split(",").map(t => t.trim()).filter(t => t && !isBasicTag(t)).concat(document.querySelector(".f-kind .on") && document.querySelector(".f-kind .on").textContent === "Basic" ? ["Basic"] : []),
     ingredients: readIngs(),
     steps: readSteps(),
     notes: val("f-notes").trim(), source: val("f-src").trim()

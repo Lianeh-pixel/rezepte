@@ -718,3 +718,9 @@ a.rlink::after { content: " ›"; text-decoration: none; display: inline-block; 
 .cook-parts span { display: block; margin-top: 6px; font-size: 12px; color: var(--muted); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cook-parts .on span { color: var(--basil); font-weight: 700; }
 .cook-next { color: var(--muted); font-size: 15px; margin-top: 18px; }
+/* Umschalter Alle | Gerichte | Basics */
+.kind-seg { display: flex; background: var(--sunk); border-radius: 999px; padding: 3px; margin: 0 0 18px; }
+.kind-seg button { flex: 1; border: 0; background: none; padding: 8px 6px; border-radius: 999px; font-weight: 600; font-size: 15px; color: var(--muted); }
+.kind-seg button.on { background: var(--btn); color: var(--basil-ink); }
+.mrow .kind-seg { margin: 6px 0; flex: none; width: 220px; }
+.mrow .kind-seg button { padding: 6px; font-size: 14px; }
