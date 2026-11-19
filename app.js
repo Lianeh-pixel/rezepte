@@ -532,9 +532,35 @@ function renderCarousel(host, names, groups) {
     [...dots.children].forEach((d, k) => d.classList.toggle("on", k === i));
     left.hidden = i <= 0; right.hidden = i >= names.length - 1;
   }
-  function goTo(i) { if (i < 0 || i >= names.length) return; car.scrollTo({ left: i * step(), behavior: "smooth" }); mark(i); }
-  let raf = 0;
-  car.addEventListener("scroll", () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(() => { const i = Math.round(car.scrollLeft / step()); if (i !== idx) mark(Math.max(0, Math.min(names.length - 1, i))); }); }, { passive: true });
+  function goTo(i, snapBack) { if (i < 0 || i >= names.length) { if (snapBack) i = idx; else return; } car.scrollTo({ left: i * step(), behavior: "smooth" }); mark(i); }
+  // Wischen selbst steuern (Finger und Maus), damit es überall gleich funktioniert
+  let drag = null, moved = false;
+  car.addEventListener("pointerdown", e => {
+    if (e.button > 0 || e.target.closest("button")) return;
+    drag = { x: e.clientX, y: e.clientY, left: car.scrollLeft, id: e.pointerId, t: Date.now(), on: false }; moved = false;
+  });
+  car.addEventListener("pointermove", e => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (!drag.on) {
+      if (Math.abs(dx) < 8 || Math.abs(dx) < Math.abs(dy) * 1.2) { if (Math.abs(dy) > 12) drag = null; return; }
+      drag.on = true; moved = true; car.classList.add("dragging");
+      try { car.setPointerCapture(e.pointerId); } catch (x) {}
+    }
+    const edge = (idx === 0 && dx > 0) || (idx === names.length - 1 && dx < 0);
+    car.scrollLeft = drag.left - (edge ? dx / 3 : dx);
+  });
+  const end = e => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const d = drag; drag = null; car.classList.remove("dragging");
+    if (!d.on) return;
+    const dx = e.clientX - d.x, fast = Math.abs(dx) / Math.max(1, Date.now() - d.t) > 0.35;
+    const th = step() * 0.25;
+    goTo(dx < -th || (fast && dx < -20) ? idx + 1 : dx > th || (fast && dx > 20) ? idx - 1 : idx, true);
+  };
+  car.addEventListener("pointerup", end); car.addEventListener("pointercancel", end);
+  car.addEventListener("click", e => { if (moved) { e.preventDefault(); e.stopPropagation(); moved = false; } }, true);
+  car.addEventListener("dragstart", e => e.preventDefault());
   sizeCarousel();
   car.scrollLeft = idx * step();
   mark(idx);
