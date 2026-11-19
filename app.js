@@ -100,10 +100,8 @@ function stepIngredients(r, text, links) {
   const lk = (links || []).map(x => x.toLowerCase());
   const linked = secs.filter(s => lk.includes(s.toLowerCase()));
   if (linked.length) {
-    // verknüpfte Zutatenlisten: im Text genannte Zutaten daraus, sonst die ganze Liste
-    const pool = items.filter(x => linked.includes(x.sec));
-    const m = pool.filter(({ i }) => { const nw = wordsOf(i.name || ""); return nw.some(w => tw.some(t => t === w || (t.length >= 3 && w.endsWith(t)) || (w.length >= 4 && t.endsWith(w)))); });
-    return (m.length ? m : pool).map(x => x.i);
+    // verknüpfte Zutatenlisten: immer die ganze Liste zeigen
+    return items.filter(x => linked.includes(x.sec)).map(x => x.i);
   }
   if (!tw.length) return [];
   const named = secs.filter(s => wordsOf(s).some(w => tw.includes(w)) || lower.includes(s.toLowerCase()));
