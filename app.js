@@ -875,16 +875,15 @@ function stepEditor(v) {
     let timer = null;
     const items = g.items.map((it, i) => it.replace(/[ \t]*\{\s*Timer:?[^}]*\}/gi, m => { if (!timer) timer = { tok: m.trim(), idx: i }; return ""; }).trim());
     const linkRow = h("div", { class: "link-row" });
-    // je Abschnitt entweder Zutatenliste verknüpfen oder Timer
     const drawLinks = () => {
       el.dataset.links = JSON.stringify(links);
       el.dataset.timer = timer ? JSON.stringify(timer) : "";
       const hasT = !!timer;
       linkRow.replaceChildren(...[
-        hasT ? null : h("button", { type: "button", class: "ing-add", onclick: e => { e.preventDefault(); openLinkDialog(links, nl => { links = nl; drawLinks(); }); } }, "Zutatenliste verknüpfen"),
+        h("button", { type: "button", class: "ing-add", onclick: e => { e.preventDefault(); openLinkDialog(links, nl => { links = nl; drawLinks(); }); } }, "Zutatenliste verknüpfen"),
         links.length ? h("span", { class: "link-info" }, links.join(", ")) : null,
         hasT ? h("span", { class: "link-info tmr-info-ed" }, icon("timer"), timerLabel(timer.tok)) : null,
-        links.length ? null : hasT
+        hasT
           ? h("button", { type: "button", class: "ing-add rl-add", onclick: e => { e.preventDefault(); timer = null; drawLinks(); } }, icon("timer"), "Timer entfernen")
           : h("button", { type: "button", class: "ing-add rl-add", onclick: e => { e.preventDefault(); openTimerDialog(t => { const tok = "{Timer " + [fmtDur(t.sec), t.dev, t.temp].join(" | ").replace(/( \| )+$/, "") + "}";
             const at = ta.dataset.sel != null ? +ta.dataset.sel : ta.value.length;
