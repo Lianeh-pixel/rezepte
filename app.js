@@ -51,10 +51,10 @@ function linkedText(t) {
   });
   out.push(t.slice(last)); return out;
 }
-function toast(msg) {
+function toast(msg, ms) {
   const t = document.getElementById("toast");
   t.textContent = msg; t.hidden = false;
-  clearTimeout(toast._t); toast._t = setTimeout(() => { t.hidden = true; }, 2600);
+  clearTimeout(toast._t); toast._t = setTimeout(() => { t.hidden = true; }, ms || 2600);
 }
 function lsGet(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }
 function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
@@ -199,6 +199,69 @@ async function refreshPhotoUrls() {
   lsSet(URL_KEY, state.photoUrls);
 }
 
+// ---------- Fotos aus Körbchen-PDFs übernehmen ----------
+const titleKey = t => norm(String(t || "")).replace(/\.(pdf|jpe?g|png)$/i, "").replace(/\s*(\(\d+\)|\d+)\s*$/, "").replace(/[^a-z0-9äöüß]/g, "");
+function pdfTitle(bytes) {
+  const txt = new TextDecoder("latin1").decode(bytes.subarray(0, Math.min(bytes.length, 4000000)));
+  const m = txt.match(/\/Title\s*\(((?:\\.|[^\\)])*)\)/);
+  if (!m) return "";
+  let t = m[1].replace(/\\([()\\])/g, "$1");
+  if (t.charCodeAt(0) === 0xfe && t.charCodeAt(1) === 0xff) { let o = ""; for (let i = 2; i + 1 < t.length; i += 2) o += String.fromCharCode((t.charCodeAt(i) << 8) | t.charCodeAt(i + 1)); t = o; }
+  return t;
+}
+function biggestJpeg(bytes) {
+  let best = null;
+  const end = new TextEncoder().encode("endstream");
+  for (let i = 0; i < bytes.length - 3; i++) {
+    if (bytes[i] !== 0xff || bytes[i + 1] !== 0xd8 || bytes[i + 2] !== 0xff) continue;
+    let j = i + 3;
+    outer: for (; j < bytes.length - end.length; j++) { for (let k = 0; k < end.length; k++) if (bytes[j + k] !== end[k]) continue outer; break; }
+    let e = j; while (e > i && !(bytes[e - 2] === 0xff && bytes[e - 1] === 0xd9)) e--;
+    if (e > i && (!best || e - i > best.length)) best = bytes.subarray(i, e);
+    i = j;
+  }
+  return best ? new Blob([best], { type: "image/jpeg" }) : null;
+}
+async function shrinkJpeg(blob) {
+  const bmp = await createImageBitmap(blob);
+  const sc = Math.min(1, 1400 / Math.max(bmp.width, bmp.height));
+  const c = document.createElement("canvas"); c.width = Math.round(bmp.width * sc); c.height = Math.round(bmp.height * sc);
+  c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+  return await new Promise(res => c.toBlob(res, "image/jpeg", 0.85));
+}
+function pickImportPhotos() {
+  const inp = h("input", { type: "file", multiple: true, accept: "application/pdf,.pdf,image/jpeg,.jpg,.jpeg", style: "display:none" });
+  inp.addEventListener("change", () => { const fs = [...inp.files]; inp.remove(); if (fs.length) importPhotos(fs); });
+  document.body.append(inp); inp.click();
+}
+async function importPhotos(files) {
+  const byKey = new Map(state.recipes.map(r => [titleKey(r.title), r]));
+  let done = 0, skipped = 0; const missing = [];
+  toast("Fotos werden übernommen …");
+  for (const f of files) {
+    try {
+      let blob = null, key = titleKey(f.name), r = byKey.get(key);
+      if (/pdf$/i.test(f.type) || /\.pdf$/i.test(f.name)) {
+        const bytes = new Uint8Array(await f.arrayBuffer());
+        if (!r) { const t = pdfTitle(bytes); r = byKey.get(titleKey(t)); }
+        if (r) blob = biggestJpeg(bytes);
+      } else if (r) blob = f;
+      if (!r) { missing.push(f.name.replace(/\.[^.]+$/, "")); continue; }
+      if (!blob) { skipped++; continue; }
+      if (r.photo_path) { skipped++; continue; }
+      const small = await shrinkJpeg(blob);
+      const path = state.user.id + "/" + uuid() + ".jpg";
+      const up = await sb.storage.from("photos").upload(path, small, { contentType: "image/jpeg", upsert: false });
+      if (up.error) throw up.error;
+      const res = await sb.from("recipes").update({ photo_path: path }).eq("id", r.id);
+      if (res.error) throw res.error;
+      r.photo_path = path; done++;
+    } catch (e) { missing.push(f.name + " (Fehler)"); }
+  }
+  await loadAll();
+  toast(done + (done === 1 ? " Foto" : " Fotos") + " übernommen" + (skipped ? ", " + skipped + " ohne Foto oder schon vorhanden" : "") + (missing.length ? ". Nicht zugeordnet: " + missing.slice(0, 4).join(", ") + (missing.length > 4 ? " …" : "") : ""), 8000);
+}
+
 // ---------- auth ----------
 async function initAuth() {
   state.photoUrls = lsGet(URL_KEY, {});
@@ -328,6 +391,7 @@ function renderList() {
       menuOpen ? h("div", { class: "h-menu", role: "menu" },
         h("button", { role: "menuitemcheckbox", "aria-checked": state.favOnly ? "true" : "false", onclick: () => { state.favOnly = !state.favOnly; state.menuOpen = false; render(); } }, state.favOnly ? "Alle Rezepte zeigen" : "Nur Favoriten zeigen"),
         state.recipes.length ? h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; render(); exportPdf(state.recipes, "Rezeptbuch.pdf"); } }, "Alle als PDF") : null,
+        h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; render(); pickImportPhotos(); } }, "Fotos aus Körbchen übernehmen"),
         h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; logout(); } }, "Abmelden")) : null)));
   if (state.loadError) app.append(h("div", { class: "notice" }, state.loadError));
   if (!state.loaded) { app.append(h("div", { class: "empty" }, h("h2", null, "Rezepte werden geladen …"))); return; }
@@ -1112,6 +1176,21 @@ document.addEventListener("keydown", e => {
   else if (e.key === "ArrowRight" && c.step < stepList(c.r).length - 1) { c.step++; drawCook(); }
   else if (e.key === "ArrowLeft" && c.step >= 0) { c.step--; drawCook(); }
 });
+// Rezeptansicht: Wischen. Zur rechten Seite (Finger nach links) -> Zubereitung, zur linken Seite (Finger nach rechts) -> Zutaten bzw. Inhaltsverzeichnis
+let swipe = null;
+document.addEventListener("touchstart", e => {
+  if (state.cook || state.route.view !== "detail" || e.touches.length !== 1 || e.target.closest(".gal, .d-hero, input, textarea, .servings, .dlg-ov")) { swipe = null; return; }
+  swipe = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+}, { passive: true });
+document.addEventListener("touchend", e => {
+  if (!swipe || state.cook || state.route.view !== "detail") return;
+  const dx = e.changedTouches[0].clientX - swipe.x, dy = e.changedTouches[0].clientY - swipe.y; swipe = null;
+  if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+  const two = mqTwo.matches, tab = state.tab || "ing";
+  if (dx < 0) { if (!two && tab === "ing") { state.tab = "steps"; render(); } }
+  else if (!two && tab === "steps") { state.tab = "ing"; render(); }
+  else go("");
+}, { passive: true });
 let touchX = null;
 document.addEventListener("touchstart", e => { if (state.cook) touchX = e.touches[0].clientX; }, { passive: true });
 document.addEventListener("touchend", e => {
