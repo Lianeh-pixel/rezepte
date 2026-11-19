@@ -650,3 +650,11 @@ a.rlink::after { content: " ›"; text-decoration: none; display: inline-block; 
 }
 .tmr-info-ed { display: inline-flex; align-items: center; gap: 6px; color: var(--basil); }
 .tmr-info-ed svg { width: 18px; height: 18px; }
+/* Handy quer: Zutaten links neben dem Timer */
+@media (orientation: landscape) and (max-height: 520px) {
+  .cook-main:has(.cook-side .cook-step-ings):has(.cook-side .tmr-card) { grid-template-columns: minmax(0, 1fr) auto; column-gap: 28px; }
+  .cook-side:has(.cook-step-ings):has(.tmr-card) { flex-direction: row; align-items: center; gap: 20px; }
+  .cook-side:has(.cook-step-ings):has(.tmr-card) > * { width: auto; }
+  .cook-side:has(.tmr-card) .cook-step-ings { width: 210px; }
+  .cook-side:has(.tmr-card) .tmr-card { flex: 0 0 auto; }
+}
