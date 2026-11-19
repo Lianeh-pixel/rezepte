@@ -658,3 +658,7 @@ a.rlink::after { content: " ›"; text-decoration: none; display: inline-block; 
   .cook-side:has(.tmr-card) .cook-step-ings { width: 210px; }
   .cook-side:has(.tmr-card) .tmr-card { flex: 0 0 auto; }
 }
+/* Handy hochkant: mehr Luft zwischen Zutaten und Timer */
+@media (orientation: portrait) {
+  .cook-side:has(.cook-step-ings) .tmr-card { margin-top: 28px; }
+}
