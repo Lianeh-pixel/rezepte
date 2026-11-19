@@ -116,6 +116,13 @@ function parseStepHead(s) {
 }
 function stepList(r) { let head = { title: "", links: [] }; const out = []; (r.steps || []).forEach(s => { if (isStepSec(s)) head = parseStepHead(s); else out.push({ text: s, sec: head.title, links: head.links }); }); return out; }
 function stepGroups(r) { const g = []; let cur = { title: "", links: [], items: [] }; (r.steps || []).forEach(s => { if (isStepSec(s)) { if (cur.items.length || cur.title || cur.links.length) g.push(cur); cur = Object.assign(parseStepHead(s), { items: [] }); } else cur.items.push(s); }); if (cur.items.length || cur.title || !g.length) g.push(cur); return g; }
+// Art der Portion: Einzahl/Mehrzahl
+const SERV_UNITS = [["Portion", "Portionen"], ["Stück", "Stück"], ["Blech", "Bleche"], ["Form", "Formen"], ["Glas", "Gläser"], ["Person", "Personen"]];
+function servLabel(r, n) {
+  const u = (r.servings_unit || "Portion").trim(), e = SERV_UNITS.find(x => x[0].toLowerCase() === u.toLowerCase() || x[1].toLowerCase() === u.toLowerCase());
+  return n + " " + (e ? (n === 1 ? e[0] : e[1]) : u);
+}
+function perLabel(r) { const u = (r.servings_unit || "Portion").trim(), e = SERV_UNITS.find(x => x[0].toLowerCase() === u.toLowerCase() || x[1].toLowerCase() === u.toLowerCase()); return "pro " + (e ? e[0] : u); }
 function scaled(r) { const base = r.servings || 0, now = state.servings[r.id] || base; return base ? now / base : 1; }
 function fmtMin(m) { if (!m) return ""; return m >= 60 ? Math.floor(m / 60) + " Std." + (m % 60 ? " " + (m % 60) + " Min." : "") : m + " Min."; }
 function norm(s) { return (s || "").toLocaleLowerCase("de").normalize("NFD").replace(/[̀-ͯ]/g, ""); }
@@ -343,7 +350,10 @@ const ICONS = {
   heart: '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>',
   clock: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2h6"/>',
   people: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.5a5 5 0 0 1 5.5 5"/>',
-  play: '<path d="M7 4l13 8-13 8z"/>'
+  play: '<path d="M7 4l13 8-13 8z"/>',
+  camera: '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
+  crop: '<path d="M6 2v16h16M2 6h16v16"/>',
+  trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>'
 };
 function icon(name, filled) {
   const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -369,15 +379,16 @@ function renderDetail(id) {
     h("div", { class: "d-bar" },
       h("button", { class: "round", "aria-label": "Zurück", onclick: () => go("") }, icon("back")),
       h("div", null,
+        h("button", { class: "round" + (r.favorite ? " fav-on" : ""), "aria-label": r.favorite ? "Favorit entfernen" : "Als Favorit merken", "aria-pressed": r.favorite ? "true" : "false", onclick: () => toggleFav(r) }, icon("heart", r.favorite)),
         h("button", { class: "round", "aria-label": "Als PDF teilen", onclick: () => exportPdf([r], safeName(r.title) + ".pdf") }, icon("share")),
         h("button", { class: "round", "aria-label": "Bearbeiten", onclick: () => go("bearbeiten-" + r.id), disabled: !state.online }, icon("pen")))));
 
   const meta = h("div", { class: "d-meta" },
-    r.servings ? h("span", null, icon("people"), r.servings + " " + (r.servings === 1 ? "Portion" : "Portionen")) : null,
+    r.servings ? h("span", null, icon("people"), servLabel(r, r.servings)) : null,
     total ? h("span", { title: [r.prep_min ? "Vorbereitung " + fmtMin(r.prep_min) : "", r.cook_min ? "Kochen/Backen " + fmtMin(r.cook_min) : ""].filter(Boolean).join(", ") }, icon("clock"), fmtMin(total)) : null,
-    h("button", { class: "d-fav" + (r.favorite ? " on" : ""), "aria-pressed": r.favorite ? "true" : "false", onclick: () => toggleFav(r) }, icon("heart", r.favorite), r.favorite ? "Favorit" : "Merken"));
+    null);
 
-  const nut = n ? h("div", { class: "d-nut", role: "list", "aria-label": r.servings ? "Nährwerte pro Portion" : "Nährwerte gesamt" },
+  const nut = n ? h("div", { class: "d-nut", role: "list", "aria-label": r.servings ? "Nährwerte " + perLabel(r) : "Nährwerte gesamt" },
     NUT.filter(([k]) => k !== "sugar" && k !== "salt" && k !== "fiber").map(([k, label, unit]) => h("div", { class: k === "kcal" ? "k" : null, role: "listitem" }, h("b", null, fmtNut(n.per[k], k) + unit), label))) : null;
 
   const seg = h("div", { class: "seg", role: "tablist" },
@@ -388,7 +399,7 @@ function renderDetail(id) {
   if (tab === "ing") {
     const serv = r.servings ? h("span", { class: "servings" },
       h("button", { "aria-label": "Weniger Portionen", onclick: () => { state.servings[r.id] = Math.max(1, now - 1); render(); } }, "−"),
-      h("span", null, now + " " + (now === 1 ? "Portion" : "Portionen")),
+      h("span", null, servLabel(r, now)),
       h("button", { "aria-label": "Mehr Portionen", onclick: () => { state.servings[r.id] = now + 1; render(); } }, "+")) : null;
     // group by sections
     const groups = []; let cur = { title: "", items: [] };
@@ -489,7 +500,7 @@ function nutritionBlock(r) {
   const item = (label, k, sub) => h("span", { class: sub ? "nv sub" : "nv" }, label + " ", h("b", null, fmtNut(per[k], k) + " g"));
   const missNames = n.missing.map(x => x.i.name);
   return h("section", { class: "nut" },
-    h("p", { class: "nut-head" }, h("b", null, fmtNut(per.kcal, "kcal") + " kcal"), " " + (r.servings ? "pro Portion" : "ganzes Rezept")),
+    h("p", { class: "nut-head" }, h("b", null, fmtNut(per.kcal, "kcal") + " kcal"), " " + (r.servings ? perLabel(r) : "ganzes Rezept")),
     h("p", { class: "nut-vals" },
       [item("Fett", "fat"), item("Kohlenhydrate", "carbs"), item("davon Zucker", "sugar", true),
       item("Eiweiß", "protein"), item("Ballaststoffe", "fiber"), item("Salz", "salt")].flatMap(x => [x, " "])),
@@ -701,41 +712,74 @@ function renderForm(id) {
   const r = id ? findRecipe(id) : null;
   if (id && !r) { app.append(h("button", { class: "btn ghost back", onclick: () => go("") }, "← Alle Rezepte"), h("div", { class: "empty" }, h("h2", null, state.loaded ? "Rezept nicht gefunden" : "Wird geladen …"))); return; }
   const v = r || {};
-  const fld = (label, control, hint) => h(control.classList && control.classList.contains("ing-edit") ? "div" : "label", { class: "field" }, h("span", null, label), control, hint ? h("small", null, hint) : null);
+  const fld = (label, control, hint) => control.classList && control.classList.contains("ing-edit") ? h("div", { class: "f-sec" }, h("h3", null, label), control, hint ? h("small", null, hint) : null) : h("label", { class: "field" }, h("span", null, label), control, hint ? h("small", null, hint) : null);
+  // Portionen ändern: auf Wunsch alle Mengen dauerhaft umrechnen
+  const servIn = h("input", { id: "f-serv", type: "number", min: "1", inputmode: "numeric", placeholder: "–", value: v.servings == null ? "" : v.servings });
+  const servAsk = h("div", { class: "serv-ask", hidden: "" });
+  const curU = (v.servings_unit || "Portion").trim();
+  const unitSel = h("select", { id: "f-sunit", class: "f-sunit", "aria-label": "Art der Portion" },
+    SERV_UNITS.map(([one, many]) => h("option", { value: one, selected: one.toLowerCase() === curU.toLowerCase() || many.toLowerCase() === curU.toLowerCase() ? true : null }, many)),
+    SERV_UNITS.some(x => x[0].toLowerCase() === curU.toLowerCase() || x[1].toLowerCase() === curU.toLowerCase()) ? null : h("option", { value: curU, selected: true }, curU));
+  let servBase = v.servings || 0;
+  let relabel = false;
+  unitSel.addEventListener("change", () => { relabel = true; });
+  servIn.addEventListener("change", () => {
+    const n = parseInt(servIn.value, 10);
+    if (!servBase || !n || n === servBase || !document.querySelector("#ing-boxes .ing-q")) { if (!servBase && n) servBase = n; servAsk.hidden = true; return; }
+    if (relabel) { relabel = false; servBase = n; return; } // Art geändert (z. B. 25 Stück -> 1 Blech): nichts umrechnen
+    const f = n / servBase;
+    document.querySelectorAll("#ing-boxes .ing-q").forEach(q => {
+      if (!q.value.trim()) return;
+      const p = parseIngredient(q.value.trim() + " x");
+      if (!p || p.qty == null) return;
+      q.value = [fmtQty(p.qty * f), p.unit].filter(Boolean).join(" ");
+    });
+    servBase = n; servAsk.hidden = true; toast("Mengen auf " + n + " " + unitSel.selectedOptions[0].textContent + " umgerechnet");
+  });
+  const mrow = (label, control, unit, extra) => h(extra ? "div" : "label", { class: "mrow" }, h("span", null, label), control, unit ? h("em", null, unit) : null, extra || null);
   const inp = (fid, val, extra) => h("input", Object.assign({ id: fid, value: val == null ? "" : val }, extra || {}));
   const dl = h("datalist", { id: "catlist" }, ["Frühstück","Vorspeise","Hauptgericht","Beilage","Suppe","Salat","Dessert","Kuchen & Gebäck","Brot","Getränk","Snack", ...categories()].filter((x, i, a) => a.indexOf(x) === i).map(c => h("option", { value: c })));
   const photoBox = h("div", { class: "photo-pick" });
   const fileIn = h("input", { type: "file", id: "f-photo", accept: "image/*", hidden: true });
-  fileIn.addEventListener("change", () => { const file = fileIn.files && fileIn.files[0]; if (!file) return; prepPhoto(file).then(blob => { clearDraftPhoto(); state.draftPhoto = { blob, previewUrl: URL.createObjectURL(blob) }; drawPhoto(); }).catch(() => toast("Das Bild konnte nicht gelesen werden.")); });
+  const usePhoto = (file, orig) => editPhoto(file).then(blob => { if (!blob) return; clearDraftPhoto(); state.draftPhoto = { blob, orig, previewUrl: URL.createObjectURL(blob) }; drawPhoto(); }).catch(() => toast("Das Bild konnte nicht gelesen werden."));
+  fileIn.addEventListener("change", () => { const file = fileIn.files && fileIn.files[0]; fileIn.value = ""; if (!file) return; usePhoto(file, file); });
+  const editCurrent = async () => {
+    const d = state.draftPhoto;
+    if (d && d.orig) return usePhoto(d.orig, d.orig);
+    try { const b = await (await fetch(photoSrc(v))).blob(); usePhoto(b, b); } catch (e) { toast("Das Foto konnte nicht geladen werden."); }
+  };
   function drawPhoto() {
     const d = state.draftPhoto;
     const src = d ? (d.remove ? "" : d.previewUrl) : photoSrc(v);
     photoBox.replaceChildren(
-      h("div", { class: "thumb" }, src ? h("img", { src, alt: "Vorschau" }) : h("span", { class: "initial", "aria-hidden": "true" }, "📷")),
-      h("div", { class: "actions" },
-        h("button", { type: "button", class: "btn", onclick: () => fileIn.click() }, src ? "Foto ändern" : "Foto hinzufügen"),
-        src ? h("button", { type: "button", class: "btn ghost", onclick: () => { clearDraftPhoto(); state.draftPhoto = { remove: true }; drawPhoto(); } }, "Entfernen") : null),
+      src
+        ? h("div", { class: "ph-img" }, h("img", { src, alt: "Foto" }),
+            h("div", { class: "ph-acts" },
+              h("button", { type: "button", class: "ph-btn", onclick: () => fileIn.click() }, icon("camera"), "Ändern"),
+              h("button", { type: "button", class: "ph-btn", onclick: editCurrent }, icon("crop"), "Bearbeiten"),
+              h("button", { type: "button", class: "ph-btn", "aria-label": "Foto entfernen", onclick: () => { clearDraftPhoto(); state.draftPhoto = { remove: true }; drawPhoto(); } }, icon("trash"))))
+        : h("button", { type: "button", class: "ph-empty", onclick: () => fileIn.click() }, icon("camera"), h("span", null, "Foto hinzufügen")),
       fileIn);
   }
   drawPhoto();
   const form = h("form", { class: "form", id: "recipe-form", novalidate: true },
     h("button", { type: "button", class: "btn ghost back", onclick: () => r ? go("rezept-" + r.id) : go("") }, "← Abbrechen"),
-    h("h2", null, r ? "Rezept bearbeiten" : "Neues Rezept"),
-    fld("Titel", inp("f-title", v.title, { required: true, placeholder: "z. B. Omas Apfelkuchen" })),
-    fld("Foto", photoBox),
-    h("div", { class: "row" },
-      fld("Kategorie", inp("f-cat", v.category, { list: "catlist", placeholder: "z. B. Kuchen & Gebäck" })),
-      fld("Portionen", inp("f-serv", v.servings, { type: "number", min: "1", inputmode: "numeric" })),
-      fld("Vorbereitung (Min.)", inp("f-prep", v.prep_min, { type: "number", min: "0", inputmode: "numeric" })),
-      fld("Kochen/Backen (Min.)", inp("f-cook", v.cook_min, { type: "number", min: "0", inputmode: "numeric" }))),
+    photoBox,
+    h("input", { id: "f-title", class: "f-title", value: v.title || "", required: true, placeholder: "Name des Rezepts", "aria-label": "Titel" }),
+    h("div", { class: "meta-list" },
+      mrow("Kategorie", inp("f-cat", v.category, { list: "catlist", placeholder: "z. B. Kuchen & Gebäck" })),
+      mrow("Menge", servIn, null, unitSel),
+      servAsk,
+      mrow("Vorbereitung", inp("f-prep", v.prep_min, { type: "number", min: "0", inputmode: "numeric", placeholder: "–" }), "Min."),
+      mrow("Kochen/Backen", inp("f-cook", v.cook_min, { type: "number", min: "0", inputmode: "numeric", placeholder: "–" }), "Min."),
+      mrow("Suchbegriffe", inp("f-tags", (v.tags || []).join(", "), { placeholder: "z. B. vegan, schnell" }))),
     dl,
-    fld("Tags", inp("f-tags", (v.tags || []).join(", "), { placeholder: "vegetarisch, schnell, Weihnachten" }), "Mit Komma trennen."),
     fld("Zutaten", ingEditor(v.ingredients || []),
       "Menge mit Einheit, z. B. 200 g oder 1 TL. Mit ≡ verschieben. Den Listennamen kannst du leer lassen, wenn es nur eine Liste gibt."),
     fld("Zubereitung", stepEditor(v),
       "Überschrift ist optional. Über „Zutatenliste verknüpfen“ wählst du eine Zutatenliste, deren Zutaten dann beim Schritt und im Kochmodus stehen. Mit ≡ verschieben."),
-    fld("Notizen", h("textarea", { id: "f-notes", rows: "3", placeholder: "Tipps, Varianten, was beim letzten Mal anders war" }, v.notes || "")),
-    fld("Quelle", inp("f-src", v.source, { placeholder: "Webseite, Buch oder Person" })),
+    h("div", { class: "f-sec" }, h("h3", null, "Notizen"), h("textarea", { id: "f-notes", class: "f-notes", rows: "3", placeholder: "Tipps, Varianten, was beim letzten Mal anders war" }, v.notes || "")),
+    h("div", { class: "meta-list" }, mrow("Quelle", inp("f-src", v.source, { placeholder: "Webseite, Buch oder Person" }))),
     state.formError ? h("p", { class: "err", role: "alert" }, state.formError) : null,
     h("div", { class: "form-actions" },
       h("button", { type: "submit", class: "btn primary", disabled: state.saving }, state.saving ? "Wird gespeichert …" : "Speichern"),
@@ -752,6 +796,91 @@ function renderForm(id) {
   }
   form.addEventListener("submit", e => { e.preventDefault(); saveRecipe(r, form); });
   app.append(form);
+}
+// Foto bearbeiten: Zuschneiden, Drehen, Helligkeit, Kontrast
+function loadImg(src) { return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; }); }
+async function editPhoto(file) {
+  const url = URL.createObjectURL(file);
+  let img; try { img = await loadImg(url); } finally { URL.revokeObjectURL(url); }
+  // Arbeitskopie (max. 2000 px), damit alles flüssig bleibt
+  const k0 = Math.min(1, 2000 / Math.max(img.naturalWidth, img.naturalHeight));
+  const base = document.createElement("canvas"); base.width = Math.round(img.naturalWidth * k0); base.height = Math.round(img.naturalHeight * k0);
+  base.getContext("2d").drawImage(img, 0, 0, base.width, base.height);
+  return new Promise(resolve => {
+    let src = base, rot = 0, aspect = "4:3", zoom = 1, ox = 0, oy = 0, bright = 100, contrast = 100;
+    const rotate = () => { const c = document.createElement("canvas"); c.width = src.height; c.height = src.width; const x = c.getContext("2d"); x.translate(c.width, 0); x.rotate(Math.PI / 2); x.drawImage(src, 0, 0); src = c; ox = oy = 0; zoom = 1; zoomIn.value = "1"; };
+    const cv = h("canvas", { class: "pe-canvas" });
+    const frame = h("div", { class: "pe-frame" }, h("i"), h("i"), h("i"), h("i"));
+    const stage = h("div", { class: "pe-stage" }, cv, frame);
+    let W = 0, H = 0, fw = 0, fh = 0, sc = 1;
+    const ratio = () => aspect === "4:3" ? 4 / 3 : aspect === "1:1" ? 1 : src.width / src.height;
+    const layout = () => {
+      const r = stage.getBoundingClientRect(); W = r.width; H = r.height;
+      const dpr = window.devicePixelRatio || 1; cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); cv.style.width = W + "px"; cv.style.height = H + "px";
+      const a = ratio(); fw = Math.min(W - 32, (H - 32) * a); fh = fw / a;
+      frame.style.width = fw + "px"; frame.style.height = fh + "px"; frame.style.left = (W - fw) / 2 + "px"; frame.style.top = (H - fh) / 2 + "px";
+      draw();
+    };
+    const clamp = () => {
+      sc = Math.max(fw / src.width, fh / src.height) * zoom;
+      const mx = Math.max(0, (src.width * sc - fw) / 2), my = Math.max(0, (src.height * sc - fh) / 2);
+      ox = Math.max(-mx, Math.min(mx, ox)); oy = Math.max(-my, Math.min(my, oy));
+    };
+    const draw = () => {
+      clamp();
+      const x = cv.getContext("2d"), dpr = window.devicePixelRatio || 1;
+      x.setTransform(dpr, 0, 0, dpr, 0, 0); x.clearRect(0, 0, W, H);
+      const dw = src.width * sc, dh = src.height * sc;
+      x.drawImage(src, W / 2 + ox - dw / 2, H / 2 + oy - dh / 2, dw, dh);
+      cv.style.filter = "brightness(" + bright / 100 + ") contrast(" + contrast / 100 + ")";
+    };
+    // Ziehen und mit zwei Fingern zoomen
+    const pts = new Map(); let last = null, pinch = null;
+    stage.addEventListener("pointerdown", e => { e.preventDefault(); stage.setPointerCapture && stage.setPointerCapture(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); last = { x: e.clientX, y: e.clientY }; if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), z: zoom }; } });
+    stage.addEventListener("pointermove", e => {
+      if (!pts.has(e.pointerId)) return;
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pts.size === 2 && pinch) { const [a, b] = [...pts.values()]; zoom = Math.max(1, Math.min(4, pinch.z * Math.hypot(a.x - b.x, a.y - b.y) / pinch.d)); zoomIn.value = String(zoom); draw(); return; }
+      if (pts.size === 1 && last) { ox += e.clientX - last.x; oy += e.clientY - last.y; last = { x: e.clientX, y: e.clientY }; draw(); }
+    });
+    const end = e => { pts.delete(e.pointerId); pinch = null; const r = [...pts.values()][0]; last = r ? { x: r.x, y: r.y } : null; };
+    stage.addEventListener("pointerup", end); stage.addEventListener("pointercancel", end);
+    stage.addEventListener("wheel", e => { e.preventDefault(); zoom = Math.max(1, Math.min(4, zoom * (e.deltaY < 0 ? 1.08 : 0.92))); zoomIn.value = String(zoom); draw(); }, { passive: false });
+    const slider = (label, min, max, step, val, on) => { const i = h("input", { type: "range", min, max, step, value: val, "aria-label": label }); i.addEventListener("input", () => on(+i.value)); return [h("label", { class: "pe-sl" }, h("span", null, label), i), i]; };
+    const [zoomL, zoomIn] = slider("Zoom", "1", "4", "0.01", "1", v => { zoom = v; draw(); });
+    const [brL, brIn] = slider("Helligkeit", "60", "140", "1", "100", v => { bright = v; draw(); });
+    const [coL, coIn] = slider("Kontrast", "60", "140", "1", "100", v => { contrast = v; draw(); });
+    const fmts = h("div", { class: "pe-fmts", role: "group", "aria-label": "Format" });
+    const drawFmts = () => fmts.replaceChildren(...[["4:3", "4:3"], ["1:1", "Quadrat"], ["orig", "Original"]].map(([k, l]) =>
+      h("button", { type: "button", class: aspect === k ? "on" : null, "aria-pressed": aspect === k ? "true" : "false", onclick: () => { aspect = k; ox = oy = 0; drawFmts(); layout(); } }, l)));
+    drawFmts();
+    const close = val => { window.removeEventListener("resize", layout); ov.remove(); resolve(val); };
+    const done = () => {
+      clamp();
+      const sw = fw / sc, sh = fh / sc, sx = src.width / 2 - ox / sc - sw / 2, sy = src.height / 2 - oy / sc - sh / 2;
+      const k = Math.min(1, 1400 / Math.max(sw, sh));
+      const c = document.createElement("canvas"); c.width = Math.round(sw * k); c.height = Math.round(sh * k);
+      const x = c.getContext("2d"); x.drawImage(src, sx, sy, sw, sh, 0, 0, c.width, c.height);
+      if (bright !== 100 || contrast !== 100) {
+        const d = x.getImageData(0, 0, c.width, c.height), a = d.data, b = bright / 100, ct = contrast / 100;
+        for (let i = 0; i < a.length; i += 4) for (let j = 0; j < 3; j++) { const v = (a[i + j] * b - 128) * ct + 128; a[i + j] = v < 0 ? 0 : v > 255 ? 255 : v; }
+        x.putImageData(d, 0, 0);
+      }
+      c.toBlob(bl => close(bl), "image/jpeg", 0.85);
+    };
+    const ov = h("div", { class: "pe", role: "dialog", "aria-modal": "true", "aria-label": "Foto bearbeiten" },
+      h("div", { class: "pe-top" },
+        h("button", { type: "button", class: "btn", onclick: () => close(null) }, "Abbrechen"),
+        h("h3", null, "Foto bearbeiten"),
+        h("button", { type: "button", class: "btn primary", onclick: done }, "Fertig")),
+      stage,
+      h("div", { class: "pe-tools" },
+        h("div", { class: "pe-row" }, fmts, h("button", { type: "button", class: "btn pe-rot", onclick: () => { rotate(); layout(); } }, "↻ Drehen")),
+        zoomL, brL, coL));
+    document.body.append(ov);
+    window.addEventListener("resize", layout);
+    requestAnimationFrame(layout);
+  });
 }
 function prepPhoto(file) {
   return new Promise((resolve, reject) => {
@@ -777,7 +906,7 @@ async function saveRecipe(existing, form) {
   if (!title) { state.formError = "Bitte gib dem Rezept einen Titel."; showFormError(form); return; }
   const num = s => { const n = parseInt(s, 10); return isNaN(n) || n < 0 ? null : n; };
   const data = {
-    title, category: val("f-cat").trim(), servings: num(val("f-serv")), prep_min: num(val("f-prep")), cook_min: num(val("f-cook")),
+    title, category: val("f-cat").trim(), servings: num(val("f-serv")), servings_unit: val("f-sunit") || "Portion", prep_min: num(val("f-prep")), cook_min: num(val("f-cook")),
     tags: val("f-tags").split(",").map(t => t.trim()).filter(Boolean),
     ingredients: readIngs(),
     steps: readSteps(),
@@ -862,7 +991,7 @@ function drawCook() {
   if (!el) { el = h("div", { class: "cook", id: "cook", role: "dialog", "aria-modal": "true", "aria-label": "Kochmodus" }); document.body.append(el); }
   const steps = stepList(c.r), total = steps.length + 1, pos = c.step + 1;
   const main = c.step < 0
-    ? [h("div", { class: "cook-label" }, "Zutaten bereitlegen" + (c.r.servings ? " · " + Math.round(c.r.servings * c.f) + " Portionen" : "")),
+    ? [h("div", { class: "cook-label" }, "Zutaten bereitlegen" + (c.r.servings ? " · " + servLabel(c.r, Math.round(c.r.servings * c.f)) : "")),
        h("ul", { class: "cook-ings" }, (c.r.ingredients || []).map(i => i.section ? h("li", null, h("span", { class: "cook-label" }, i.section)) : h("li", null, h("b", null, [fmtQty(i.qty != null ? i.qty * c.f : null), i.unit].filter(Boolean).join(" ")), " ", i.name)))]
     : [h("div", { class: "cook-label" }, (steps[c.step].sec ? steps[c.step].sec + " · " : "") + "Schritt " + (c.step + 1) + " von " + steps.length), h("p", { class: "cook-text" }, steps[c.step].text), stepIngLine(c.r, steps[c.step].text, c.f, "cook-step-ings", steps[c.step].links)];
   el.replaceChildren(
@@ -945,7 +1074,7 @@ async function exportPdf(recipes, filename) {
     font("times", "bold", 28, INK);
     y = lines(wrap(r.title, CW - 10), PW / 2, y, 28, 11, { align: "center" }) + 2;
     ornament(y + 1, 22); y += 7;
-    const facts = [r.servings ? r.servings + (r.servings === 1 ? " Portion" : " Portionen") : "", r.prep_min ? "Vorbereitung " + fmtMin(r.prep_min) : "", r.cook_min ? "Kochen/Backen " + fmtMin(r.cook_min) : ""].filter(Boolean).join("   ·   ");
+    const facts = [r.servings ? servLabel(r, r.servings) : "", r.prep_min ? "Vorbereitung " + fmtMin(r.prep_min) : "", r.cook_min ? "Kochen/Backen " + fmtMin(r.cook_min) : ""].filter(Boolean).join("   ·   ");
     if (facts) { font("times", "italic", 11, GREY); y = lines(wrap(facts, CW), PW / 2, y, 11, 5, { align: "center" }) + 4; }
     // Spalten vorbereiten
     const LW = 56, GAP = 9, RX = M + LW + GAP, RW = CW - LW - GAP, QW = 17;
@@ -1013,7 +1142,7 @@ async function exportPdf(recipes, filename) {
     const drawNutrition = (x, top, width) => {
       let yy = top + 6;
       if (yy + 46 > BOTTOM) { newPage(); yy = y; }
-      font("times", "bold", 11, GREEN); doc.text(r.servings ? "Nährwerte pro Portion" : "Nährwerte gesamt", x, yy + 3); yy += 5.5;
+      font("times", "bold", 11, GREEN); doc.text(r.servings ? "Nährwerte " + perLabel(r) : "Nährwerte gesamt", x, yy + 3); yy += 5.5;
       const rows = [["Brennwert", fmtNut(nut.per.kcal, "kcal") + " kcal"], ["Fett", fmtNut(nut.per.fat, "fat") + " g"], ["Kohlenhydrate", fmtNut(nut.per.carbs, "carbs") + " g"], ["  davon Zucker", fmtNut(nut.per.sugar, "sugar") + " g"], ["Eiweiß", fmtNut(nut.per.protein, "protein") + " g"], ["Ballaststoffe", fmtNut(nut.per.fiber, "fiber") + " g"], ["Salz", fmtNut(nut.per.salt, "salt") + " g"]];
       doc.setDrawColor(...RULE); doc.setLineWidth(0.25);
       rows.forEach(([a, b], i) => {
