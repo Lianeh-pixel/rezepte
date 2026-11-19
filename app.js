@@ -835,22 +835,20 @@ function openTimerDialog(done) {
   const close = () => { ov.remove(); document.removeEventListener("keydown", esc); };
   const esc = e => { if (e.key === "Escape") close(); };
   let dev = "";
-  const devRow = h("div", { class: "tmr-chips" });
-  const drawDev = () => devRow.replaceChildren(...DEVICES.map(d => h("button", { type: "button", class: "chip" + (dev === d ? " on" : ""), "aria-pressed": dev === d ? "true" : "false", onclick: e => { e.preventDefault(); dev = dev === d ? "" : d; drawDev(); } }, icon(devIcon(d)), d)));
-  const temp = h("input", { type: "text", inputmode: "text", placeholder: "optional, z. B. 175 °C Umluft", "aria-label": "Temperatur" });
-  const hh = h("input", { type: "number", min: "0", max: "23", inputmode: "numeric", placeholder: "0", "aria-label": "Stunden" });
-  const mm = h("input", { type: "number", min: "0", max: "59", inputmode: "numeric", placeholder: "0", "aria-label": "Minuten" });
-  [hh, mm].forEach(i => i.addEventListener("keydown", e => { if (e.key === "Enter") ok(e); }));
+  const devRow = h("div", { class: "tmr-kinds", role: "group", "aria-label": "Art" });
+  const drawDev = () => devRow.replaceChildren(...DEVICES.map(d => h("button", { type: "button", class: "tmr-kind" + (dev === d ? " on" : ""), "aria-pressed": dev === d ? "true" : "false", onclick: e => { e.preventDefault(); dev = dev === d ? "" : d; drawDev(); } }, icon(devIcon(d)), h("span", null, d))));
+  const num = (label, max) => h("input", { type: "text", inputmode: "numeric", pattern: "[0-9]*", maxlength: "3", placeholder: "0", "aria-label": label, oninput: e => { e.target.value = e.target.value.replace(/\D/g, ""); } });
+  const hh = num("Stunden"), mm = num("Minuten"), temp = num("Temperatur in Grad");
   const ok = e => { e && e.preventDefault(); const sec = ((+hh.value || 0) * 60 + (+mm.value || 0)) * 60; if (!sec) { mm.focus(); return; }
-    let t = temp.value.trim().replace(/[{}|]/g, ""); if (/^\d+$/.test(t)) t += " °C";
-    close(); done({ sec, dev: dev.replace(/[{}|]/g, ""), temp: t }); };
+    close(); done({ sec, dev, temp: temp.value ? temp.value + " °C" : "" }); };
+  [hh, mm, temp].forEach(i => i.addEventListener("keydown", e => { if (e.key === "Enter") ok(e); }));
   const box = h("div", { class: "dlg tmr-dlg", role: "dialog", "aria-modal": "true", "aria-label": "Timer" },
-    h("h3", null, "Timer"),
-    h("div", { class: "tmr-f" }, h("span", { class: "sec" }, "Art"), devRow),
-    h("div", { class: "tmr-f" }, h("span", { class: "sec" }, "Temperatur"), temp),
-    h("div", { class: "tmr-f" }, h("span", { class: "sec" }, "Zeit"), h("div", { class: "tmr-own" }, h("label", null, hh, "Std."), h("label", null, mm, "Min."))),
-    h("p", { class: "dlg-hint" }, "Erscheint nur im Kochmodus als Timer-Knopf."),
-    h("div", { class: "dlg-btns" },
+    h("div", { class: "tmr-head" }, h("span", { class: "tmr-head-ic" }, icon("timer")), h("h3", null, "Timer")),
+    devRow,
+    h("div", { class: "tmr-time" },
+      h("label", null, hh, h("small", null, "Std.")), h("span", { class: "tmr-colon" }, ":"), h("label", null, mm, h("small", null, "Min."))),
+    h("label", { class: "tmr-temp" }, icon("thermo"), h("span", null, "Temperatur"), temp, h("b", null, "°C")),
+    h("div", { class: "dlg-btns tmr-btns" },
       h("button", { type: "button", class: "btn", onclick: e => { e.preventDefault(); close(); } }, "Abbrechen"),
       h("button", { type: "button", class: "btn primary", onclick: ok }, "Einfügen")));
   const ov = h("div", { class: "dlg-ov", onclick: e => { if (e.target === ov) close(); } }, box);

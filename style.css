@@ -589,3 +589,28 @@ a.rlink::after { content: " ›"; text-decoration: none; display: inline-block; 
 .tmr-own input { width: 96px; font-size: 22px; text-align: center; min-height: 52px; }
 .tmr-chips .chip { display: inline-flex; align-items: center; gap: 6px; }
 .tmr-chips .chip .ic { width: 16px; height: 16px; }
+/* Timer-Fenster */
+.tmr-dlg { max-width: 440px; gap: 20px; padding: 22px; }
+.tmr-head { display: flex; align-items: center; gap: 10px; }
+.tmr-head-ic { width: 36px; height: 36px; border-radius: 999px; display: grid; place-items: center; background: var(--btn); color: var(--basil-ink); }
+.tmr-head-ic .ic { width: 20px; height: 20px; }
+.tmr-head h3 { font-size: 22px; }
+.tmr-kinds { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.tmr-kind { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 2px 10px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.tmr-kind .ic { width: 24px; height: 24px; color: var(--basil); }
+.tmr-kind.on { background: var(--btn); border-color: var(--btn); color: var(--basil-ink); }
+.tmr-kind.on .ic { color: var(--basil-ink); }
+.tmr-time { display: flex; justify-content: center; align-items: flex-start; gap: 10px; }
+.tmr-time label { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.tmr-dlg .tmr-time input { width: 104px; min-height: 0; height: 76px; padding: 0; font-size: 44px; font-weight: 700; text-align: center; font-variant-numeric: tabular-nums; border-radius: 16px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); }
+.tmr-dlg .tmr-time input:focus { outline: 2px solid var(--basil); outline-offset: 0; border-color: transparent; }
+.tmr-time small { font-size: 13px; color: var(--muted); }
+.tmr-colon { font-size: 40px; font-weight: 700; line-height: 76px; color: var(--muted); }
+.tmr-temp { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); }
+.tmr-temp > .ic { width: 20px; height: 20px; color: var(--basil); }
+.tmr-temp > span { flex: 1; color: var(--muted); }
+.tmr-dlg .tmr-temp input { width: 64px; min-height: 0; height: 40px; padding: 0; border: 0; background: transparent; color: var(--fg); font-size: 22px; font-weight: 700; text-align: right; }
+.tmr-dlg .tmr-temp input:focus { outline: none; }
+.tmr-temp b { font-size: 18px; color: var(--muted); }
+.tmr-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.tmr-btns .btn { justify-content: center; min-height: 50px; }
