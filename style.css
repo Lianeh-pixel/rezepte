@@ -171,3 +171,47 @@ button { cursor: pointer; }
 .food-form .field input { padding: 8px 10px; }
 .login .btn.primary { justify-content: center; }
 .nut-cell span { overflow-wrap: anywhere; }
+
+/* ===== Rezeptansicht (Entwurf B) ===== */
+.wrap.full { max-width: none; padding: 0; }
+.ic { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.ic.filled { fill: currentColor; }
+.sec { font-size: 12px; letter-spacing: .07em; text-transform: uppercase; font-weight: 700; color: var(--basil); }
+.d-hero { position: relative; height: min(44vh, 420px); min-height: 240px; background: var(--sunk); overflow: hidden; display: grid; place-items: center; }
+.d-hero img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.d-hero .initial { font-family: var(--font-display); font-size: 120px; font-weight: 700; color: var(--line); }
+.d-bar { position: absolute; top: calc(12px + env(safe-area-inset-top, 0px)); left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); display: flex; justify-content: space-between; z-index: 2; }
+.d-bar > div { display: flex; gap: 10px; }
+.round { width: 44px; height: 44px; border-radius: 999px; display: grid; place-items: center; border: 0; background: rgba(20, 25, 22, .45); color: #fff; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+.round[disabled] { opacity: .5; }
+.d-hero.noimg .round { background: var(--surface); color: var(--fg); }
+.d-sheet { position: relative; margin: -32px auto 0; max-width: 760px; background: var(--bg); border-radius: 26px 26px 0 0;
+  padding-block: 20px 110px; padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 12px; }
+.grab { width: 44px; height: 5px; border-radius: 9px; background: var(--line); margin: -8px auto 4px; }
+.d-title { font-size: clamp(30px, 7vw, 44px); letter-spacing: -0.02em; font-weight: 700; margin-top: -4px; }
+.d-meta { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; color: var(--muted); font-size: 15px; }
+.d-meta > span, .d-fav { display: inline-flex; gap: 6px; align-items: center; }
+.d-meta .ic { width: 18px; height: 18px; }
+.d-fav { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 5px 12px; font-weight: 600; color: var(--muted); min-height: 34px; }
+.d-fav.on { color: var(--basil); border-color: var(--basil); }
+.d-nut { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+.d-nut > div { flex: none; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; font-size: 12px; color: var(--muted); min-width: 72px; }
+.d-nut > div.k { background: var(--basil); border-color: var(--basil); color: var(--basil-ink); }
+.d-nut b { display: block; font-family: var(--font-display); font-size: 19px; color: inherit; font-variant-numeric: tabular-nums; }
+.d-nut > div:not(.k) b { color: var(--fg); }
+.seg { display: grid; grid-template-columns: 1fr 1fr; background: var(--sunk); border-radius: 12px; padding: 4px; margin-top: 4px; }
+.seg button { border: 0; background: none; padding: 10px; border-radius: 9px; font-weight: 700; color: var(--muted); font-size: 16px; }
+.seg button.on { background: var(--surface); color: var(--fg); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+.d-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 40px; flex-wrap: wrap; }
+.d-sec { margin: 16px 0 6px; }
+.d-ing { list-style: none; margin: 6px 0 0; padding: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
+.d-ing li { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 10px; align-items: baseline; padding: 11px 14px; border-bottom: 1px solid var(--line); }
+.d-ing li:last-child { border-bottom: 0; }
+.d-ing .qty { font-weight: 700; font-variant-numeric: tabular-nums; }
+.d-src { margin-top: 6px; }
+.d-dock { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; padding-block: 14px calc(14px + env(safe-area-inset-bottom, 0px)); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  background: linear-gradient(180deg, transparent, var(--bg) 35%); display: flex; justify-content: center; pointer-events: none; }
+.d-dock .btn { pointer-events: auto; width: 100%; max-width: 728px; justify-content: center; min-height: 54px; font-size: 17px; border-radius: 16px; }
+.d-dock .ic { width: 18px; height: 18px; fill: currentColor; }
+.nut h3 { font-size: 18px; }
+@media (min-width: 900px) { .d-hero { height: 420px; } }

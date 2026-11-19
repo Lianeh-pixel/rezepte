@@ -32,7 +32,7 @@ function h(tag, attrs, ...kids) {
     else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
     else el.setAttribute(k, v === true ? "" : v);
   }
-  for (const kid of kids.flat()) if (kid != null && kid !== false) el.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+  for (const kid of kids.flat(Infinity)) if (kid != null && kid !== false) el.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
   return el;
 }
 function toast(msg) {
@@ -216,6 +216,7 @@ function onRoute() {
   const prev = state.route;
   state.route = readHash();
   state.confirmDelete = false; state.formError = ""; state.foodForm = null;
+  if (state.route.view === "detail" && prev.id !== state.route.id) state.tab = "ing";
   if (state.route.view === "edit" && (prev.view !== "edit" || prev.id !== state.route.id)) clearDraftPhoto();
   render();
   window.scrollTo(0, 0);
@@ -226,6 +227,7 @@ window.addEventListener("hashchange", onRoute);
 function render() {
   if (state.route.view !== "edit") { const ae = document.activeElement; if (ae && ae.id === "q") state._keepSearchFocus = ae.selectionStart; }
   app.replaceChildren();
+  app.classList.remove("full");
   if (!state.authReady) { app.append(h("div", { class: "empty" }, h("h2", null, "Wird geladen …"))); return; }
   if (state.route.view === "newpw" && state.user) return renderNewPassword();
   if (!state.user) return renderLogin();
@@ -289,53 +291,84 @@ function card(r) {
       h("div", { class: "meta" }, time ? h("span", null, "⏱ " + fmtMin(time)) : null, r.servings ? h("span", null, r.servings + " Portionen") : null)));
 }
 
+const ICONS = {
+  back: '<path d="M15 18l-6-6 6-6"/>',
+  pen: '<path d="M4 20h4L19 9l-4-4L4 16z"/>',
+  share: '<path d="M12 3v12M7 8l5-5 5 5M5 14v6h14v-6"/>',
+  heart: '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>',
+  clock: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2h6"/>',
+  people: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.5a5 5 0 0 1 5.5 5"/>',
+  play: '<path d="M7 4l13 8-13 8z"/>'
+};
+function icon(name, filled) {
+  const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  s.setAttribute("viewBox", "0 0 24 24"); s.setAttribute("class", "ic" + (filled ? " filled" : "")); s.setAttribute("aria-hidden", "true");
+  s.innerHTML = ICONS[name]; return s;
+}
 function renderDetail(id) {
   const r = findRecipe(id);
-  app.append(h("button", { class: "btn ghost back", onclick: () => go("") }, "← Alle Rezepte"));
-  if (!r) { app.append(h("div", { class: "empty" }, h("h2", null, state.loaded ? "Rezept nicht gefunden" : "Rezept wird geladen …"), h("p", null, state.loaded ? "Vielleicht wurde es auf einem anderen Gerät gelöscht." : ""))); return; }
+  if (!r) {
+    app.append(h("button", { class: "btn ghost back", onclick: () => go("") }, "← Alle Rezepte"),
+      h("div", { class: "empty" }, h("h2", null, state.loaded ? "Rezept nicht gefunden" : "Rezept wird geladen …"), h("p", null, state.loaded ? "Vielleicht wurde es auf einem anderen Gerät gelöscht." : "")));
+    return;
+  }
+  app.classList.add("full");
   const f = scaled(r), now = state.servings[r.id] || r.servings;
-  const checked = state.checked[r.id] || (state.checked[r.id] = {});
-  const actions = h("div", { class: "detail-actions" },
-    (r.steps || []).length ? h("button", { class: "btn primary", onclick: () => openCook(r) }, "Kochmodus starten") : null,
-    h("button", { class: "btn", onclick: () => toggleFav(r), "aria-pressed": r.favorite ? "true" : "false" }, r.favorite ? "★ Favorit" : "☆ Als Favorit"),
-    h("button", { class: "btn", onclick: () => go("bearbeiten-" + r.id), disabled: !state.online }, "Bearbeiten"),
-    h("button", { class: "btn", onclick: () => exportPdf([r], safeName(r.title) + ".pdf") }, "Als PDF"),
-    h("button", { class: "btn danger", onclick: () => { state.confirmDelete = true; render(); }, disabled: !state.online }, "Löschen"));
-  const confirm = state.confirmDelete ? h("div", { class: "confirm" },
-    h("span", null, "„" + r.title + "“ wirklich löschen? Das lässt sich nicht rückgängig machen."),
-    h("button", { class: "btn danger solid", onclick: () => deleteRecipe(r) }, "Ja, löschen"),
-    h("button", { class: "btn", onclick: () => { state.confirmDelete = false; render(); } }, "Abbrechen")) : null;
-  app.append(h("div", { class: "hero" },
-    thumb(r),
-    h("div", { class: "hero-text" },
-      h("div", null, r.category ? h("span", { class: "tag" }, r.category) : null, (r.tags || []).length ? h("span", { class: "meta" }, r.tags.join(" · ")) : null),
-      h("h2", null, r.title),
-      h("div", { class: "facts" },
-        r.prep_min ? h("div", { class: "fact" }, h("b", null, "Vorbereitung"), fmtMin(r.prep_min)) : null,
-        r.cook_min ? h("div", { class: "fact" }, h("b", null, "Kochen / Backen"), fmtMin(r.cook_min)) : null,
-        r.servings ? h("div", { class: "fact" }, h("b", null, "Grundrezept"), r.servings + " Portionen") : null),
-      r.notes ? h("p", { class: "notes" }, r.notes) : null,
-      r.source ? h("div", { class: "meta" }, "Quelle: ", /^https?:\/\//.test(r.source) ? h("a", { href: r.source, target: "_blank", rel: "noopener" }, r.source.replace(/^https?:\/\/(www\.)?/, "").slice(0, 50)) : r.source) : null,
-      actions, confirm)));
+  const tab = state.tab || "ing";
+  const src = photoSrc(r);
+  const total = (r.prep_min || 0) + (r.cook_min || 0);
+  const n = (r.ingredients || []).some(i => !i.section) ? computeNutrition(r) : null;
 
-  const ingList = h("ul", { class: "ing" });
-  (r.ingredients || []).forEach((i, idx) => {
-    if (i.section) { ingList.append(h("li", { class: "section" }, i.section)); return; }
-    const cb = h("input", { type: "checkbox", id: "ing-" + idx });
-    cb.checked = !!checked[idx];
-    cb.addEventListener("change", () => { checked[idx] = cb.checked; });
-    ingList.append(h("li", null, h("label", { for: "ing-" + idx }, cb,
-      h("span", { class: "qty" }, [fmtQty(i.qty != null ? i.qty * f : null), i.unit].filter(Boolean).join(" ")),
-      h("span", null, i.name))));
-  });
-  const serv = r.servings ? h("span", { class: "servings" },
-    h("button", { "aria-label": "Weniger Portionen", onclick: () => { state.servings[r.id] = Math.max(1, now - 1); render(); } }, "−"),
-    h("span", null, now + " Portionen"),
-    h("button", { "aria-label": "Mehr Portionen", onclick: () => { state.servings[r.id] = now + 1; render(); } }, "+")) : null;
-  app.append(h("div", { class: "sheet" },
-    h("section", null, h("h3", null, "Zutaten", serv), (r.ingredients || []).length ? ingList : h("p", { class: "meta" }, "Keine Zutaten eingetragen."), nutritionBlock(r)),
-    h("section", null, h("h3", null, "Zubereitung"),
-      (r.steps || []).length ? h("ol", { class: "steps" }, r.steps.map(s => h("li", null, h("p", null, s)))) : h("p", { class: "meta" }, "Keine Schritte eingetragen."))));
+  const hero = h("div", { class: "d-hero" + (src ? "" : " noimg") },
+    src ? h("img", { src, alt: "" }) : h("span", { class: "initial", "aria-hidden": "true" }, (r.title || "?").trim().charAt(0).toUpperCase()),
+    h("div", { class: "d-bar" },
+      h("button", { class: "round", "aria-label": "Zurück", onclick: () => go("") }, icon("back")),
+      h("div", null,
+        h("button", { class: "round", "aria-label": "Als PDF teilen", onclick: () => exportPdf([r], safeName(r.title) + ".pdf") }, icon("share")),
+        h("button", { class: "round", "aria-label": "Bearbeiten", onclick: () => go("bearbeiten-" + r.id), disabled: !state.online }, icon("pen")))));
+
+  const meta = h("div", { class: "d-meta" },
+    r.servings ? h("span", null, icon("people"), r.servings + " " + (r.servings === 1 ? "Portion" : "Portionen")) : null,
+    total ? h("span", { title: [r.prep_min ? "Vorbereitung " + fmtMin(r.prep_min) : "", r.cook_min ? "Kochen/Backen " + fmtMin(r.cook_min) : ""].filter(Boolean).join(", ") }, icon("clock"), fmtMin(total)) : null,
+    h("button", { class: "d-fav" + (r.favorite ? " on" : ""), "aria-pressed": r.favorite ? "true" : "false", onclick: () => toggleFav(r) }, icon("heart", r.favorite), r.favorite ? "Favorit" : "Merken"));
+
+  const nut = n ? h("div", { class: "d-nut", role: "list", "aria-label": r.servings ? "Nährwerte pro Portion" : "Nährwerte gesamt" },
+    NUT.filter(([k]) => k !== "sugar" && k !== "salt").map(([k, label, unit]) => h("div", { class: k === "kcal" ? "k" : null, role: "listitem" }, h("b", null, fmtNut(n.per[k], k) + unit), label))) : null;
+
+  const seg = h("div", { class: "seg", role: "tablist" },
+    h("button", { role: "tab", "aria-selected": tab === "ing" ? "true" : "false", class: tab === "ing" ? "on" : null, onclick: () => { state.tab = "ing"; render(); } }, "Zutaten"),
+    h("button", { role: "tab", "aria-selected": tab === "steps" ? "true" : "false", class: tab === "steps" ? "on" : null, onclick: () => { state.tab = "steps"; render(); } }, "Zubereitung"));
+
+  let body;
+  if (tab === "ing") {
+    const serv = r.servings ? h("span", { class: "servings" },
+      h("button", { "aria-label": "Weniger Portionen", onclick: () => { state.servings[r.id] = Math.max(1, now - 1); render(); } }, "−"),
+      h("span", null, now + " " + (now === 1 ? "Portion" : "Portionen")),
+      h("button", { "aria-label": "Mehr Portionen", onclick: () => { state.servings[r.id] = now + 1; render(); } }, "+")) : null;
+    // group by sections
+    const groups = []; let cur = { title: "", items: [] };
+    (r.ingredients || []).forEach(i => { if (i.section) { if (cur.items.length || cur.title) groups.push(cur); cur = { title: i.section, items: [] }; } else cur.items.push(i); });
+    if (cur.items.length || cur.title) groups.push(cur);
+    body = h("div", null,
+      h("div", { class: "d-row" }, h("span", { class: "sec" }, groups[0] && groups[0].title ? groups[0].title : ""), serv),
+      groups.length ? groups.map((g, gi) => [gi > 0 ? h("div", { class: "sec d-sec" }, g.title) : null,
+        h("ul", { class: "d-ing" }, g.items.map(i => h("li", null,
+          h("span", { class: "qty" }, [fmtQty(i.qty != null ? i.qty * f : null), i.unit].filter(Boolean).join(" ")),
+          h("span", null, i.name))))]) : h("p", { class: "meta" }, "Keine Zutaten eingetragen."),
+      nutritionBlock(r));
+  } else {
+    body = (r.steps || []).length ? h("ol", { class: "steps" }, r.steps.map(s => h("li", null, h("p", null, s)))) : h("p", { class: "meta" }, "Keine Schritte eingetragen.");
+  }
+
+  app.append(hero, h("div", { class: "d-sheet" },
+    h("div", { class: "grab", "aria-hidden": "true" }),
+    r.category ? h("div", { class: "sec" }, r.category) : null,
+    h("h2", { class: "d-title" }, r.title),
+    meta,
+    r.notes ? h("p", { class: "notes" }, r.notes) : null,
+    nut, seg, body,
+    r.source ? h("div", { class: "meta d-src" }, "Quelle: ", /^https?:\/\//.test(r.source) ? h("a", { href: r.source, target: "_blank", rel: "noopener" }, r.source.replace(/^https?:\/\/(www\.)?/, "").slice(0, 50)) : r.source) : null,
+    (r.steps || []).length ? h("div", { class: "d-dock" }, h("button", { class: "btn primary", onclick: () => openCook(r) }, icon("play"), "Kochmodus starten")) : null));
 }
 
 // ---------- nutrition ----------
@@ -410,7 +443,7 @@ function nutritionBlock(r) {
   const missNames = n.missing.filter(x => !x.food).map(x => x.i.name);
   return h("section", { class: "nut" },
     h("h3", null, r.servings ? "Nährwerte pro Portion" : "Nährwerte (ganzes Rezept)"),
-    h("div", { class: "nut-grid" }, NUT.map(([k, label, unit]) => h("div", { class: "nut-cell" + (k === "kcal" ? " kcal" : "") }, h("b", null, fmtNut(n.per[k], k) + unit), h("span", null, label)))),
+    h("p", { class: "meta" }, NUT.map(([k, label, unit]) => label + " " + fmtNut(n.per[k], k) + unit).join(" · ")),
     n.missing.length ? h("p", { class: "notice" }, n.missing.length + (n.missing.length === 1 ? " Zutat fehlt" : " Zutaten fehlen") + " in der Berechnung. Die Werte sind deshalb zu niedrig.") : null,
     h("small", null, "Geschätzt aus der eingebauten Nährwerttabelle (Durchschnittswerte pro 100 g)."),
     h("details", null, h("summary", null, "So wurde gerechnet"), list),
@@ -483,7 +516,17 @@ function renderForm(id) {
     state.formError ? h("p", { class: "err", role: "alert" }, state.formError) : null,
     h("div", { class: "form-actions" },
       h("button", { type: "submit", class: "btn primary", disabled: state.saving }, state.saving ? "Wird gespeichert …" : "Speichern"),
-      h("button", { type: "button", class: "btn", onclick: () => r ? go("rezept-" + r.id) : go("") }, "Abbrechen")));
+      h("button", { type: "button", class: "btn", onclick: () => r ? go("rezept-" + r.id) : go("") }, "Abbrechen"),
+      r ? h("button", { type: "button", class: "btn danger", style: "margin-left:auto", onclick: () => { state.confirmDelete = true; drawConfirm(); } }, "Löschen") : null),
+    h("div", { id: "confirm-host" }));
+  function drawConfirm() {
+    const host = form.querySelector("#confirm-host");
+    host.replaceChildren(state.confirmDelete ? h("div", { class: "confirm" },
+      h("span", null, "„" + r.title + "“ wirklich löschen? Das lässt sich nicht rückgängig machen."),
+      h("button", { type: "button", class: "btn danger solid", onclick: () => deleteRecipe(r) }, "Ja, löschen"),
+      h("button", { type: "button", class: "btn", onclick: () => { state.confirmDelete = false; drawConfirm(); } }, "Abbrechen")) : "");
+    if (state.confirmDelete) host.scrollIntoView({ block: "center" });
+  }
   form.addEventListener("submit", e => { e.preventDefault(); saveRecipe(r, form); });
   app.append(form);
 }
