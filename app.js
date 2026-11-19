@@ -505,8 +505,17 @@ function renderForm(id) {
       fld("Kochen/Backen (Min.)", inp("f-cook", v.cook_min, { type: "number", min: "0", inputmode: "numeric" }))),
     dl,
     fld("Tags", inp("f-tags", (v.tags || []).join(", "), { placeholder: "vegetarisch, schnell, Weihnachten" }), "Mit Komma trennen."),
-    fld("Zutaten", h("textarea", { id: "f-ing", rows: "8", placeholder: "200 g Mehl\n2 Eier\n1/2 TL Salz\nFür den Guss:\n100 g Puderzucker" }, (v.ingredients || []).map(ingToLine).join("\n")),
-      "Eine Zutat pro Zeile, Menge zuerst (z. B. 200 g Mehl, 2 EL Öl, 1 Zwiebel). Eine Zeile mit Doppelpunkt am Ende wird zur Zwischenüberschrift."),
+    fld("Zutaten", h("div", { class: "ing-edit" },
+      h("textarea", { id: "f-ing", rows: "10", placeholder: "Boden:\n200 g Mehl\n2 Eier\n1 Prise Salz\n\nBelag:\n1 kg Äpfel\n1 TL Zimt" }, (v.ingredients || []).map((i, k) => (i.section && k > 0 ? "\n" : "") + ingToLine(i)).join("\n")),
+      h("button", { type: "button", class: "btn", onclick: e => {
+        e.preventDefault();
+        const ta = document.getElementById("f-ing"), name = "Neuer Abschnitt";
+        const before = ta.value.replace(/\s+$/, "");
+        ta.value = (before ? before + "\n\n" : "") + name + ":\n";
+        const start = ta.value.length - name.length - 2;
+        ta.focus(); ta.setSelectionRange(start, start + name.length);
+      } }, "+ Abschnitt (z. B. Boden, Belag)")),
+      "Eine Zutat pro Zeile, Menge zuerst (z. B. 200 g Mehl). Ein Abschnitt ist eine Zeile mit Doppelpunkt am Ende, z. B. „Boden:“. Alles darunter gehört zu diesem Abschnitt."),
     fld("Zubereitung", h("textarea", { id: "f-steps", rows: "10", placeholder: "Ofen auf 180 °C vorheizen.\n\nMehl und Eier verrühren." }, (v.steps || []).join("\n\n")),
       "Jeder Absatz (Leerzeile dazwischen) wird ein Schritt."),
     fld("Notizen", h("textarea", { id: "f-notes", rows: "3", placeholder: "Tipps, Varianten, was beim letzten Mal anders war" }, v.notes || "")),
@@ -727,7 +736,7 @@ async function exportPdf(recipes, filename) {
     const LW = 56, GAP = 9, RX = M + LW + GAP, RW = CW - LW - GAP, QW = 17;
     const ing = (r.ingredients || []);
     font("times", "normal", 11);
-    const ingRows = ing.map(i => i.section ? { sec: pdfText(i.section) } : { q: pdfText([fmtQty(i.qty), i.unit].filter(Boolean).join(" ")), name: wrap(i.name, LW - QW - 2) });
+    const ingRows = ing.map(i => i.section ? { sec: pdfText(i.section) } : { q: pdfText([fmtQty(i.qty), i.unit].filter(Boolean).join(" ")), name: wrap(i.name, LW - QW - 2), nameRaw: pdfText(i.name) });
     const stepRows = (r.steps || []).map(s => wrap(s, RW - 8));
     const nut = ing.some(i => !i.section) ? computeNutrition(r) : null;
     const ingH = 10 + ingRows.reduce((s, x) => s + (x.sec ? 7 : x.name.length * 4.8 + 1.2), 0) + (nut ? 50 : 0);
@@ -746,15 +755,42 @@ async function exportPdf(recipes, filename) {
     }
     if (noteLines.length) { font("times", "italic", 11, GREY); ensure(noteH); y = lines(noteLines, PW / 2, y, 11, 5, { align: "center" }) + 5; }
 
+    const ING_STYLE = window.RB_ING_STYLE || "leader";
     const drawIngredients = (x, top, width, qw) => {
+      const boxed = ING_STYLE === "box";
       let yy = heading("Zutaten", x, top, width);
+      if (boxed) { const hgt = ingRows.reduce((s, r2) => s + (r2.sec ? 7 : 5.6), 0) + 6; doc.setFillColor(238, 243, 236); doc.roundedRect(x - 2, yy - 2, width + 4, hgt, 2, 2, "F"); yy += 2; }
+      const pad = boxed ? 2 : 0;
       ingRows.forEach(row => {
-        if (row.sec) { yy += 2; font("helvetica", "bold", 7.5, GREEN); doc.text(row.sec.toUpperCase(), x, yy + 2.6, { charSpace: 0.6 }); yy += 5; return; }
-        if (yy + row.name.length * 4.8 > BOTTOM) { newPage(); yy = y; }
-        font("times", "bold", 11, INK); doc.text(row.q, x + qw - 1, yy + 11 * PT * 0.8, { align: "right" });
-        font("times", "normal", 11, INK); yy = lines(row.name, x + qw + 1.5, yy, 11, 4.8) + 1.2;
+        if (row.sec) { yy += 2; font("helvetica", "bold", 7.5, GREEN); doc.text(row.sec.toUpperCase(), x + pad, yy + 2.6, { charSpace: 0.6 }); yy += 5; return; }
+        if (yy + 5 > BOTTOM) { newPage(); yy = y; }
+        const base = yy + 11 * PT * 0.8;
+        if (ING_STYLE === "leader") {
+          font("times", "italic", 11, INK); const qW = row.q ? doc.getTextWidth(row.q) : 0;
+          font("times", "normal", 11, INK); const nl = doc.splitTextToSize(row.nameRaw, width - qW - 8);
+          nl.forEach((l, i) => doc.text(l, x, base + i * 4.8));
+          const lastW = doc.getTextWidth(nl[nl.length - 1]), ly = base + (nl.length - 1) * 4.8;
+          if (row.q) {
+            font("times", "italic", 11, INK); doc.text(row.q, x + width, ly, { align: "right" });
+            const d0 = x + lastW + 2, d1 = x + width - qW - 2;
+            doc.setFillColor(...RULE); for (let dx = d0; dx < d1; dx += 1.6) doc.circle(dx, ly - 0.4, 0.18, "F");
+          }
+          yy += nl.length * 4.8 + 1.4;
+        } else {
+          // Menge und Zutat in einer Zeile, mit kleinem Punkt davor
+          doc.setFillColor(...GREEN); doc.circle(x + pad + 1, base - 1.3, 0.7, "F");
+          font("times", "bold", 11, INK); const qW = row.q ? doc.getTextWidth(row.q) + 1.8 : 0;
+          if (row.q) doc.text(row.q, x + pad + 4, base);
+          font("times", "normal", 11, INK);
+          const nl = doc.splitTextToSize(row.nameRaw, width - pad * 2 - 4 - qW);
+          doc.text(nl[0], x + pad + 4 + qW, base);
+          const rest = nl.slice(1).join(" ");
+          const more = rest ? doc.splitTextToSize(rest, width - pad * 2 - 4) : [];
+          more.forEach((l, i) => doc.text(l, x + pad + 4, base + (i + 1) * 4.8));
+          yy += (1 + more.length) * 4.8 + 0.8;
+        }
       });
-      return yy;
+      return yy + (boxed ? 3 : 0);
     };
     const drawNutrition = (x, top, width) => {
       let yy = top + 6;

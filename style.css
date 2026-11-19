@@ -253,3 +253,4 @@ button { cursor: pointer; }
 .fab { position: fixed; right: max(20px, env(safe-area-inset-right, 0px)); bottom: calc(24px + env(safe-area-inset-bottom, 0px)); width: 56px; height: 56px; border-radius: 999px; border: 0; background: var(--basil); color: var(--basil-ink); font-size: 30px; line-height: 1; box-shadow: 0 6px 18px rgba(0,0,0,.18); z-index: 20; }
 @media (min-width: 900px) { .fab { right: calc(50% - 320px - 80px); } }
 .nut h3 { margin-bottom: 10px; }
+.ing-edit { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; } .ing-edit textarea { width: 100%; }
