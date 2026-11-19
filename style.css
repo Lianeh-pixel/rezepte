@@ -297,3 +297,25 @@ button { cursor: pointer; }
 .steps-wrap { counter-reset: s; display: flex; flex-direction: column; gap: 10px; }
 .steps-wrap .steps { counter-reset: none; }
 .steps-wrap > .sec:first-child { margin-bottom: 4px; }
+/* Zutaten-Zeilen im Formular */
+.ing-rows { display: flex; flex-direction: column; }
+.ing-row { display: grid; grid-template-columns: 92px minmax(0, 1fr) 28px 28px; gap: 6px; align-items: center; padding: 3px 0; background: var(--surface); }
+.ing-row input { font: inherit; font-size: 16px; padding: 8px 10px; border: 1px solid transparent; border-bottom-color: var(--line); border-radius: 8px; background: none; color: var(--fg); min-width: 0; width: 100%; }
+.ing-row input:focus { outline: none; border-color: var(--basil); }
+.ing-row .ing-q { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+.ing-grip { cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; color: var(--basil); font-size: 22px; line-height: 1; text-align: center; padding: 6px 0; }
+.ing-x { font: inherit; font-size: 20px; line-height: 1; color: var(--muted); background: none; border: 0; padding: 6px 0; cursor: pointer; }
+.ing-row.drag { opacity: .85; box-shadow: 0 4px 14px rgba(0,0,0,.15); border-radius: 8px; position: relative; z-index: 2; }
+.ing-add { align-self: flex-start; font: inherit; font-size: 15px; font-weight: 600; color: var(--basil); background: none; border: 0; padding: 8px 2px 2px; cursor: pointer; }
+.ing-box.drag { opacity: .9; box-shadow: 0 8px 24px rgba(0,0,0,.18); position: relative; z-index: 2; }
+.ing-box-head .ing-grip { width: 28px; }
+/* Verknüpfung Schritt -> Zutatenliste */
+.link-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.link-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 14px; font-weight: 600; color: var(--basil); background: var(--saffron-soft); border-radius: 999px; padding: 4px 6px 4px 12px; }
+.link-chip button { font: inherit; font-size: 16px; line-height: 1; color: var(--muted); background: none; border: 0; padding: 0 4px; cursor: pointer; }
+.link-menu { width: 100%; display: flex; flex-direction: column; gap: 10px; padding: 10px 0 2px; border-top: 1px solid var(--line); margin-top: 4px; }
+.link-pick, .link-new { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.link-pick > span, .link-new > span { width: 100%; font-size: 13px; color: var(--muted); font-weight: 600; }
+.link-new-row { display: flex; gap: 6px; width: 100%; }
+.link-new-row input { flex: 1; min-width: 0; font: inherit; font-size: 16px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--fg); }
+.link-menu .ing-box-del { align-self: flex-start; padding-left: 0; }

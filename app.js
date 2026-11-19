@@ -45,7 +45,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch
 function parseQty(s) {
   s = s.trim();
   let m = s.match(/^(\d+)\s+(\d+)\/(\d+)$/); if (m) return +m[1] + m[2] / m[3];
-  m = s.match(/^(\d+)([½¼¾⅓⅔⅛])$/); if (m) return +m[1] + FRAC[m[2]];
+  m = s.match(/^(\d+)\s*([½¼¾⅓⅔⅛])$/); if (m) return +m[1] + FRAC[m[2]];
   if (FRAC[s] != null) return FRAC[s];
   m = s.match(/^(\d+)\/(\d+)$/); if (m) return m[1] / m[2];
   const n = parseFloat(s.replace(",", ".")); return isNaN(n) ? null : n;
@@ -53,7 +53,7 @@ function parseQty(s) {
 function parseIngredient(line) {
   line = line.trim(); if (!line) return null;
   if (/^#|:$/.test(line)) return { section: line.replace(/^#\s*/, "").replace(/:$/, "") };
-  const m = line.match(/^(\d+\s+\d+\/\d+|\d+[½¼¾⅓⅔⅛]|[½¼¾⅓⅔⅛]|\d+\/\d+|\d+(?:[.,]\d+)?)\s*(.*)$/);
+  const m = line.match(/^(\d+\s+\d+\/\d+|\d+\s*[½¼¾⅓⅔⅛]|[½¼¾⅓⅔⅛]|\d+\/\d+|\d+(?:[.,]\d+)?)\s*(.*)$/);
   let qty = null, rest = line;
   if (m) { qty = parseQty(m[1]); rest = m[2]; }
   let unit = "";
@@ -75,14 +75,22 @@ function ingToLine(i) { return i.section ? i.section + ":" : [fmtQty(i.qty), i.u
 function normWord(w) { return w.toLowerCase().replace(/ä/g, "a").replace(/ö/g, "o").replace(/ü/g, "u").replace(/ß/g, "ss").replace(/(en|n|e|s)$/, ""); }
 const STOP = new Set(["und", "mit", "den", "dem", "der", "die", "das", "ein", "eine", "einer", "einem", "einen", "auf", "aus", "bei", "bis", "für", "von", "zum", "zur", "ihn", "sie", "alle", "alles", "etwas", "nach", "noch", "dann", "darin", "dazu", "oder", "nicht", "gut", "kurz", "lang", "min", "std", "grad", "minuten", "stunde", "stunden", "geben", "lassen"]);
 function wordsOf(t) { return (t.match(/[A-Za-zÄÖÜäöüß]+/g) || []).filter(w => w.length >= 3 && !STOP.has(w.toLowerCase())).map(normWord).filter(w => w.length >= 3); }
-function stepIngredients(r, text, stepSec) {
-  const tw = wordsOf(text); if (!tw.length) return [];
+function stepIngredients(r, text, links) {
+  const tw = wordsOf(text);
   let sec = "", items = [];
   (r.ingredients || []).forEach(i => { if (i.section) sec = i.section; else items.push({ i, sec }); });
   const secs = [...new Set(items.map(x => x.sec).filter(Boolean))];
   const lower = text.toLowerCase();
-  const linked = stepSec ? secs.filter(s => s.toLowerCase() === stepSec.toLowerCase()) : [];
-  const named = linked.length ? linked : secs.filter(s => wordsOf(s).some(w => tw.includes(w)) || lower.includes(s.toLowerCase()));
+  const lk = (links || []).map(x => x.toLowerCase());
+  const linked = secs.filter(s => lk.includes(s.toLowerCase()));
+  if (linked.length) {
+    // verknüpfte Zutatenlisten: im Text genannte Zutaten daraus, sonst die ganze Liste
+    const pool = items.filter(x => linked.includes(x.sec));
+    const m = pool.filter(({ i }) => { const nw = wordsOf(i.name || ""); return nw.some(w => tw.some(t => t === w || (t.length >= 3 && w.endsWith(t)) || (w.length >= 4 && t.endsWith(w)))); });
+    return (m.length ? m : pool).map(x => x.i);
+  }
+  if (!tw.length) return [];
+  const named = secs.filter(s => wordsOf(s).some(w => tw.includes(w)) || lower.includes(s.toLowerCase()));
   if (named.length) items = items.filter(x => named.includes(x.sec) || !x.sec);
   const hits = items.filter(({ i }) => {
     const nw = wordsOf(i.name || ""); if (!nw.length) return false;
@@ -93,14 +101,21 @@ function stepIngredients(r, text, stepSec) {
   const best = {}; hits.forEach(x => { const k = (x.i.name || "").toLowerCase(); if (!best[k] || cnt[x.sec] > cnt[best[k].sec]) best[k] = x; });
   return hits.filter(x => best[(x.i.name || "").toLowerCase()] === x).map(x => x.i);
 }
-function stepIngLine(r, text, f, cls, sec) {
-  const list = stepIngredients(r, text, sec); if (!list.length) return null;
+function stepIngLine(r, text, f, cls, links) {
+  const list = stepIngredients(r, text, links); if (!list.length) return null;
   return h("p", { class: cls }, list.map((i, k) => [k ? " · " : "", h("b", null, [fmtQty(i.qty != null ? i.qty * f : null), i.unit].filter(Boolean).join(" ")), (i.qty != null || i.unit ? " " : "") + i.name]));
 }
 // Zubereitung: Abschnitte werden als Eintrag "# Name" in steps gespeichert
 const isStepSec = s => typeof s === "string" && /^#\s/.test(s);
-function stepList(r) { let sec = ""; const out = []; (r.steps || []).forEach(s => { if (isStepSec(s)) sec = s.replace(/^#\s*/, "").trim(); else out.push({ text: s, sec }); }); return out; }
-function stepGroups(r) { const g = []; let cur = { title: "", items: [] }; (r.steps || []).forEach(s => { if (isStepSec(s)) { if (cur.items.length || cur.title) g.push(cur); cur = { title: s.replace(/^#\s*/, "").trim(), items: [] }; } else cur.items.push(s); }); if (cur.items.length || cur.title || !g.length) g.push(cur); return g; }
+// Kopf eines Zubereitungs-Abschnitts: "# Überschrift | Zutatenliste1, Zutatenliste2" (ohne "|" = Überschrift ist zugleich die Verknüpfung)
+function parseStepHead(s) {
+  const body = s.replace(/^#\s*/, "");
+  if (!body.includes("|")) { const t = body.trim(); return { title: t, links: t ? [t] : [], explicit: false }; }
+  const [t, l] = body.split("|");
+  return { title: t.trim(), links: l.split(",").map(x => x.trim()).filter(Boolean), explicit: true };
+}
+function stepList(r) { let head = { title: "", links: [] }; const out = []; (r.steps || []).forEach(s => { if (isStepSec(s)) head = parseStepHead(s); else out.push({ text: s, sec: head.title, links: head.links }); }); return out; }
+function stepGroups(r) { const g = []; let cur = { title: "", links: [], items: [] }; (r.steps || []).forEach(s => { if (isStepSec(s)) { if (cur.items.length || cur.title || cur.links.length) g.push(cur); cur = Object.assign(parseStepHead(s), { items: [] }); } else cur.items.push(s); }); if (cur.items.length || cur.title || !g.length) g.push(cur); return g; }
 function scaled(r) { const base = r.servings || 0, now = state.servings[r.id] || base; return base ? now / base : 1; }
 function fmtMin(m) { if (!m) return ""; return m >= 60 ? Math.floor(m / 60) + " Std." + (m % 60 ? " " + (m % 60) + " Min." : "") : m + " Min."; }
 function norm(s) { return (s || "").toLocaleLowerCase("de").normalize("NFD").replace(/[̀-ͯ]/g, ""); }
@@ -389,7 +404,7 @@ function renderDetail(id) {
   } else {
     body = stepList(r).length ? h("div", { class: "steps-wrap" }, stepGroups(r).filter(g => g.items.length).map((g, gi) => [
         g.title ? h("div", { class: "sec" + (gi > 0 ? " d-sec" : "") }, g.title) : null,
-        h("ol", { class: "steps" }, g.items.map(s => h("li", null, h("div", null, h("p", null, s), stepIngLine(r, s, f, "step-ings", g.title)))))]))
+        h("ol", { class: "steps" }, g.items.map(s => h("li", null, h("div", null, h("p", null, s), stepIngLine(r, s, f, "step-ings", g.links)))))]))
       : h("p", { class: "meta" }, "Keine Schritte eingetragen.");
   }
 
@@ -506,48 +521,98 @@ function foodFormFor(names) {
 
 // ---------- form ----------
 function clearDraftPhoto() { if (state.draftPhoto && state.draftPhoto.previewUrl) URL.revokeObjectURL(state.draftPhoto.previewUrl); state.draftPhoto = null; }
+function readIngs() {
+  const out = [];
+  document.querySelectorAll("#ing-boxes .ing-box").forEach(b => {
+    const t = b.querySelector(".ing-box-name").value.trim().replace(/:+$/, "");
+    const items = [...b.querySelectorAll(".ing-row")].map(r => {
+      const q = r.querySelector(".ing-q").value.trim(), n = r.querySelector(".ing-n").value.trim().replace(/:+$/, "");
+      if (!q && !n) return null;
+      const p = parseIngredient((q ? q + " " : "") + n);
+      return p && p.section ? { qty: null, unit: "", name: n } : p;
+    }).filter(Boolean);
+    if (t && (items.length || b.parentNode.children.length > 1)) out.push({ section: t });
+    out.push(...items);
+  });
+  return out;
+}
 function ingEditor(list) {
   const groups = []; let cur = { title: "", items: [] };
   list.forEach(i => { if (i.section) { if (cur.items.length || cur.title) groups.push(cur); cur = { title: i.section, items: [] }; } else cur.items.push(i); });
   if (cur.items.length || cur.title || !groups.length) groups.push(cur);
-  const hidden = h("textarea", { id: "f-ing", hidden: "" });
   const boxes = h("div", { class: "ing-boxes", id: "ing-boxes" });
-  const sync = () => {
-    const parts = [...boxes.children].map(b => {
-      const t = b.querySelector("input").value.trim().replace(/:+$/, "");
-      const body = b.querySelector("textarea").value.split("\n").map(l => l.trim()).filter(Boolean)
-        .map(l => /:$/.test(l) ? l.replace(/:+$/, "") : l).join("\n"); // Doppelpunkt innerhalb einer Box ist kein Abschnitt
-      return (t ? t + ":\n" : "") + body;
+  const mark = () => boxes.classList.toggle("multi", boxes.children.length > 1);
+  // Zeile: Menge | Zutat | verschieben | löschen
+  const row = (i, list, after, focus) => {
+    const q = h("input", { type: "text", class: "ing-q", placeholder: "Menge", "aria-label": "Menge", value: i ? [fmtQty(i.qty), i.unit].filter(Boolean).join(" ") : "", autocomplete: "off" });
+    const n = h("input", { type: "text", class: "ing-n", placeholder: "Zutat", "aria-label": "Zutat", value: i ? i.name || "" : "", autocomplete: "off" });
+    const grip = h("span", { class: "ing-grip", "aria-hidden": "true", title: "Ziehen zum Verschieben" }, "≡");
+    const del = h("button", { type: "button", class: "ing-x", "aria-label": "Zutat entfernen", onclick: e => { e.preventDefault(); const nx = el.nextElementSibling || el.previousElementSibling; el.remove(); if (nx) nx.querySelector(".ing-n").focus(); } }, "×");
+    const el = h("div", { class: "ing-row" }, q, n, grip, del);
+    // Enter: neue Zeile darunter
+    n.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); row(null, list, el, true); } });
+    q.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); n.focus(); } });
+    // Mehrere Zeilen einfügen: auf Zeilen verteilen
+    const onPaste = e => {
+      const t = (e.clipboardData || window.clipboardData).getData("text");
+      if (!t || !t.includes("\n")) return;
+      e.preventDefault();
+      let at = el; const ls = t.split("\n").map(l => l.trim()).filter(Boolean);
+      ls.forEach((l, k) => {
+        const p = parseIngredient(l) || {};
+        const item = p.section ? { name: p.section } : p;
+        if (k === 0 && !q.value && !n.value) { q.value = [fmtQty(item.qty), item.unit].filter(Boolean).join(" "); n.value = item.name || ""; }
+        else at = row(item, list, at);
+      });
+    };
+    n.addEventListener("paste", onPaste); q.addEventListener("paste", onPaste);
+    // Verschieben per Ziehen (Finger oder Maus)
+    grip.addEventListener("pointerdown", e => {
+      e.preventDefault(); el.classList.add("drag");
+      const move = ev => {
+        const rows = [...boxes.querySelectorAll(".ing-row")].filter(r => r !== el);
+        const hit = rows.find(r => { const b = r.getBoundingClientRect(); return ev.clientY >= b.top && ev.clientY <= b.bottom; });
+        if (hit) { const b = hit.getBoundingClientRect(); if (ev.clientY < b.top + b.height / 2) hit.before(el); else hit.after(el); }
+        // in leere Liste eines Abschnitts ziehen
+        boxes.querySelectorAll(".ing-rows").forEach(lb => { if (!lb.children.length || (lb.children.length === 1 && lb.firstChild === el)) { const r = lb.getBoundingClientRect(); if (ev.clientY >= r.top - 20 && ev.clientY <= r.bottom + 20) lb.append(el); } });
+      };
+      const up = () => { el.classList.remove("drag"); window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up); };
+      window.addEventListener("pointermove", move); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up);
     });
-    hidden.value = parts.filter(Boolean).join("\n");
-    boxes.classList.toggle("multi", boxes.children.length > 1);
+    if (after) after.after(el); else list.append(el);
+    if (focus) n.focus();
+    return el;
   };
   const box = (g, focus) => {
-    const name = h("input", { type: "text", class: "ing-box-name", placeholder: "Abschnitt, z. B. Teig", "aria-label": "Name des Abschnitts", value: g.title || "" });
-    const ta = h("textarea", { rows: String(Math.max(4, g.items.length + 1)), placeholder: "200 g Mehl\n2 Eier\n1 Prise Salz", "aria-label": "Zutaten" }, g.items.map(ingToLine).join("\n"));
-    const del = h("button", { type: "button", class: "ing-box-del", "aria-label": "Abschnitt entfernen", title: "Abschnitt entfernen", onclick: e => {
+    const name = h("input", { type: "text", class: "ing-box-name", placeholder: "Name der Liste, z. B. Teig", "aria-label": "Name der Zutatenliste", value: g.title || "" });
+    const list = h("div", { class: "ing-rows" });
+    const del = h("button", { type: "button", class: "ing-box-del", "aria-label": "Abschnitt entfernen", onclick: e => {
       e.preventDefault();
-      if (ta.value.trim() && del.dataset.sure !== "1") { del.dataset.sure = "1"; del.textContent = "Wirklich entfernen?"; return; }
-      el.remove(); sync();
+      const filled = [...list.querySelectorAll("input")].some(i => i.value.trim());
+      if (filled && del.dataset.sure !== "1") { del.dataset.sure = "1"; del.textContent = "Wirklich entfernen?"; return; }
+      el.remove(); mark();
     } }, "Entfernen");
-    const el = h("div", { class: "ing-box" }, h("div", { class: "ing-box-head" }, name, del), ta);
-    name.addEventListener("input", sync); ta.addEventListener("input", sync);
-    boxes.append(el);
-    if (focus) setTimeout(() => name.focus(), 0);
+    const el = h("div", { class: "ing-box" }, h("div", { class: "ing-box-head" }, name, del), list,
+      h("button", { type: "button", class: "ing-add", onclick: e => { e.preventDefault(); row(null, list, null, true); } }, "+ Zutat hinzufügen"));
+    (g.items.length ? g.items : [null]).forEach(i => row(i, list));
+    boxes.append(el); mark();
+    if (focus) name.focus();
+    return el;
   };
   groups.forEach(g => box(g));
-  sync();
-  return h("div", { class: "ing-edit" }, boxes, hidden,
-    h("button", { type: "button", class: "btn", onclick: e => { e.preventDefault(); box({ title: "", items: [] }, true); sync(); } }, "+ Abschnitt"));
+  ingEditor.addBox = n => { const el = box({ title: n, items: [] }); };
+  return h("div", { class: "ing-edit" }, boxes,
+    h("button", { type: "button", class: "btn", onclick: e => { e.preventDefault(); box({ title: "", items: [] }, true); } }, "+ Neue Zutatenliste"));
 }
 function splitSteps(t) { let a = t.split(/\n\s*\n/).map(s => s.trim()).filter(Boolean); if (a.length === 1 && a[0].includes("\n")) a = a[0].split("\n").map(s => s.trim()).filter(Boolean); return a; }
 function readSteps() {
   const out = [];
   document.querySelectorAll("#step-boxes .ing-box").forEach(b => {
-    const t = b.querySelector("input").value.trim().replace(/^#+\s*/, "").replace(/:+$/, "");
+    const t = b.querySelector(".ing-box-name").value.trim().replace(/^#+\s*/, "").replace(/:+$/, "").replace(/\|/g, "/");
+    const links = JSON.parse(b.dataset.links || "[]");
     const items = splitSteps(b.querySelector("textarea").value).map(s => s.replace(/^#+\s+/, ""));
     if (!items.length) return;
-    if (t) out.push("# " + t);
+    if (t || links.length || out.length) out.push("# " + t + " | " + links.join(", "));
     out.push(...items);
   });
   return out;
@@ -557,25 +622,58 @@ function ingSectionNames() {
 }
 function stepEditor(v) {
   const boxes = h("div", { class: "ing-boxes", id: "step-boxes" });
-  const dl = h("datalist", { id: "secnames" });
-  const refreshNames = () => dl.replaceChildren(...ingSectionNames().map(n => h("option", { value: n })));
   const mark = () => boxes.classList.toggle("multi", boxes.children.length > 1);
   const box = (g, focus) => {
-    const name = h("input", { type: "text", class: "ing-box-name", list: "secnames", placeholder: "Abschnitt, z. B. Belag", "aria-label": "Name des Abschnitts", value: g.title || "" });
-    name.addEventListener("focus", refreshNames);
+    const name = h("input", { type: "text", class: "ing-box-name", placeholder: "Überschrift, z. B. Belegen", "aria-label": "Überschrift des Schritts", value: g.title || "" });
+    let links = (g.links || []).slice();
+    const linkRow = h("div", { class: "link-row" });
+    const drawLinks = (menu) => {
+      el.dataset.links = JSON.stringify(links);
+      const avail = ingSectionNames().filter(n => !links.some(l => l.toLowerCase() === n.toLowerCase()));
+      const kids = links.map(l => h("span", { class: "link-chip" }, l,
+        h("button", { type: "button", "aria-label": "Verknüpfung entfernen", onclick: e => { e.preventDefault(); links = links.filter(x => x !== l); drawLinks(); } }, "×")));
+      if (!menu) kids.push(h("button", { type: "button", class: "ing-add", onclick: e => { e.preventDefault(); drawLinks(true); } }, "+ Zutaten hinzufügen"));
+      linkRow.replaceChildren(...kids);
+      if (menu) {
+        const newName = h("input", { type: "text", placeholder: "Name der neuen Liste", "aria-label": "Name der neuen Zutatenliste" });
+        const create = e => {
+          e && e.preventDefault();
+          const n = newName.value.trim().replace(/[:|,]/g, ""); if (!n) { newName.focus(); return; }
+          if (!ingSectionNames().some(x => x.toLowerCase() === n.toLowerCase()) && ingEditor.addBox) ingEditor.addBox(n);
+          links.push(n); drawLinks();
+        };
+        newName.addEventListener("keydown", e => { if (e.key === "Enter") create(e); });
+        linkRow.append(h("div", { class: "link-menu" },
+          avail.length ? h("div", { class: "link-pick" }, h("span", null, "Zutatenliste wählen"), avail.map(n => h("button", { type: "button", class: "btn", onclick: e => { e.preventDefault(); links.push(n); drawLinks(); } }, n))) : null,
+          h("div", { class: "link-new" }, h("span", null, "Oder neue Zutatenliste"), h("div", { class: "link-new-row" }, newName, h("button", { type: "button", class: "btn primary", onclick: create }, "Anlegen"))),
+          h("button", { type: "button", class: "ing-box-del", onclick: e => { e.preventDefault(); drawLinks(); } }, "Abbrechen")));
+      }
+    };
     const ta = h("textarea", { rows: String(Math.max(5, g.items.length * 2 + 1)), placeholder: "Ofen auf 180 °C vorheizen.\n\nMehl und Eier verrühren.", "aria-label": "Schritte" }, g.items.join("\n\n"));
     const del = h("button", { type: "button", class: "ing-box-del", onclick: e => {
       e.preventDefault();
       if (ta.value.trim() && del.dataset.sure !== "1") { del.dataset.sure = "1"; del.textContent = "Wirklich entfernen?"; return; }
       el.remove(); mark();
     } }, "Entfernen");
-    const el = h("div", { class: "ing-box" }, h("div", { class: "ing-box-head" }, name, del), ta);
+    const grip = h("span", { class: "ing-grip", "aria-hidden": "true", title: "Ziehen zum Verschieben" }, "≡");
+    const el = h("div", { class: "ing-box" }, h("div", { class: "ing-box-head" }, name, del, grip), ta, linkRow);
+    drawLinks();
+    grip.addEventListener("pointerdown", e => {
+      e.preventDefault(); el.classList.add("drag");
+      const move = ev => {
+        const others = [...boxes.children].filter(b => b !== el);
+        const target = others.find(b => { const r = b.getBoundingClientRect(); return ev.clientY < r.top + r.height / 2; });
+        if (target) boxes.insertBefore(el, target); else boxes.append(el);
+      };
+      const up = () => { el.classList.remove("drag"); window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up); };
+      window.addEventListener("pointermove", move); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up);
+    });
     boxes.append(el); mark();
-    if (focus) setTimeout(() => name.focus(), 0);
+    if (focus) name.focus();
   };
   stepGroups(v).forEach(g => box(g));
-  return h("div", { class: "ing-edit" }, boxes, dl,
-    h("button", { type: "button", class: "btn", onclick: e => { e.preventDefault(); box({ title: "", items: [] }, true); } }, "+ Abschnitt"));
+  return h("div", { class: "ing-edit" }, boxes,
+    h("button", { type: "button", class: "btn", onclick: e => { e.preventDefault(); box({ title: "", links: [], items: [] }, true); } }, "+ Schritt"));
 }
 function renderForm(id) {
   const r = id ? findRecipe(id) : null;
@@ -611,9 +709,9 @@ function renderForm(id) {
     dl,
     fld("Tags", inp("f-tags", (v.tags || []).join(", "), { placeholder: "vegetarisch, schnell, Weihnachten" }), "Mit Komma trennen."),
     fld("Zutaten", ingEditor(v.ingredients || []),
-      "Eine Zutat pro Zeile, Menge zuerst (z. B. 200 g Mehl). Den Namen des Abschnitts kannst du leer lassen, wenn es nur einen gibt."),
+      "Menge mit Einheit, z. B. 200 g oder 1 TL. Mit ≡ verschieben. Den Namen des Abschnitts kannst du leer lassen, wenn es nur einen gibt."),
     fld("Zubereitung", stepEditor(v),
-      "Jeder Absatz (Leerzeile dazwischen) wird ein Schritt. Heißt ein Abschnitt hier genauso wie bei den Zutaten, werden dessen Zutaten bei den Schritten angezeigt."),
+      "Überschrift ist optional. Über „Zutaten hinzufügen“ verknüpfst du eine Zutatenliste, deren Zutaten dann beim Schritt und im Kochmodus stehen. Mit ≡ verschieben."),
     fld("Notizen", h("textarea", { id: "f-notes", rows: "3", placeholder: "Tipps, Varianten, was beim letzten Mal anders war" }, v.notes || "")),
     fld("Quelle", inp("f-src", v.source, { placeholder: "Webseite, Buch oder Person" })),
     state.formError ? h("p", { class: "err", role: "alert" }, state.formError) : null,
@@ -659,7 +757,7 @@ async function saveRecipe(existing, form) {
   const data = {
     title, category: val("f-cat").trim(), servings: num(val("f-serv")), prep_min: num(val("f-prep")), cook_min: num(val("f-cook")),
     tags: val("f-tags").split(",").map(t => t.trim()).filter(Boolean),
-    ingredients: val("f-ing").split("\n").map(parseIngredient).filter(Boolean),
+    ingredients: readIngs(),
     steps: readSteps(),
     notes: val("f-notes").trim(), source: val("f-src").trim()
   };
@@ -744,7 +842,7 @@ function drawCook() {
   const main = c.step < 0
     ? [h("div", { class: "cook-label" }, "Zutaten bereitlegen" + (c.r.servings ? " · " + Math.round(c.r.servings * c.f) + " Portionen" : "")),
        h("ul", { class: "cook-ings" }, (c.r.ingredients || []).map(i => i.section ? h("li", null, h("span", { class: "cook-label" }, i.section)) : h("li", null, h("b", null, [fmtQty(i.qty != null ? i.qty * c.f : null), i.unit].filter(Boolean).join(" ")), " ", i.name)))]
-    : [h("div", { class: "cook-label" }, (steps[c.step].sec ? steps[c.step].sec + " · " : "") + "Schritt " + (c.step + 1) + " von " + steps.length), h("p", { class: "cook-text" }, steps[c.step].text), stepIngLine(c.r, steps[c.step].text, c.f, "cook-step-ings", steps[c.step].sec)];
+    : [h("div", { class: "cook-label" }, (steps[c.step].sec ? steps[c.step].sec + " · " : "") + "Schritt " + (c.step + 1) + " von " + steps.length), h("p", { class: "cook-text" }, steps[c.step].text), stepIngLine(c.r, steps[c.step].text, c.f, "cook-step-ings", steps[c.step].links)];
   el.replaceChildren(
     h("div", { class: "cook-top" }, h("h2", null, c.r.title), h("button", { class: "btn", onclick: closeCook }, "Beenden")),
     h("div", { class: "cook-progress", "aria-hidden": "true" }, h("div", { style: "width:" + Math.round(pos / total * 100) + "%" })),
@@ -832,10 +930,10 @@ async function exportPdf(recipes, filename) {
     const ing = (r.ingredients || []);
     font("times", "normal", 11);
     const ingRows = ing.map(i => i.section ? { sec: pdfText(i.section) } : { q: pdfText([fmtQty(i.qty), i.unit].filter(Boolean).join(" ")), name: wrap(i.name, LW - QW - 2), nameRaw: pdfText(i.name) });
-    const stepRows = (r.steps || []).map(s => isStepSec(s) ? { sec: pdfText(s.replace(/^#\s*/, "").trim()) } : wrap(s, RW - 8));
+    const stepRows = (r.steps || []).map(s => isStepSec(s) ? { sec: pdfText(parseStepHead(s).title) } : wrap(s, RW - 8));
     const nut = ing.some(i => !i.section) ? computeNutrition(r) : null;
     const ingH = 10 + ingRows.reduce((s, x) => s + (x.sec ? 7 : x.name.length * 4.8 + 1.2), 0) + (nut ? 50 : 0);
-    const stepH = stepRows.length ? 10 + stepRows.reduce((s, ls) => s + (ls.sec ? 7 : ls.length * 5.2 + 3), 0) : 0;
+    const stepH = stepRows.length ? 10 + stepRows.reduce((s, ls) => s + (ls.sec !== undefined ? 7 : ls.length * 5.2 + 3), 0) : 0;
     // Foto: so hoch, dass Zutaten und Zubereitung möglichst noch auf dieselbe Seite passen
     font("times", "italic", 11, GREY);
     const noteLines = r.notes ? wrap(r.notes, CW - 20) : [];
@@ -908,7 +1006,7 @@ async function exportPdf(recipes, filename) {
       let yy = heading("Zubereitung", x, top, width);
       let k = 0;
       stepRows.forEach(ls => {
-        if (ls.sec) { yy += 2; font("helvetica", "bold", 7.5, GREEN); doc.text(ls.sec.toUpperCase(), x, yy + 2.6, { charSpace: 0.6 }); yy += 5; return; }
+        if (ls.sec !== undefined) { if (!ls.sec) return; yy += 2; font("helvetica", "bold", 7.5, GREEN); doc.text(ls.sec.toUpperCase(), x, yy + 2.6, { charSpace: 0.6 }); yy += 5; return; }
         if (yy + Math.min(ls.length, 2) * 5.2 > BOTTOM) { newPage(); yy = y; }
         font("times", "bold", 12, GREEN); doc.text(String(++k), x, yy + 11 * PT * 0.8);
         font("times", "normal", 11, INK);
