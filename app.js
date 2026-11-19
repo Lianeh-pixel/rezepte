@@ -438,8 +438,9 @@ function renderGridOnly() {
   const names = [...groups.keys()].sort(catCmp);
   host.replaceChildren(h("div", { class: "toc" }, names.map(c => {
     const rs = groups.get(c).sort((a, b) => a.title.localeCompare(b.title, "de"));
-    return h("section", null,
-      h("h2", { class: "chap" }, c, h("span", null, rs.length + (rs.length === 1 ? " Rezept" : " Rezepte"))),
+    const draft = catRank(c) === 2;
+    return h("section", draft ? { class: "draft" } : null,
+      h("h2", { class: "chap" }, draft ? h("b", null, icon("pen"), c) : c, h("span", null, rs.length + (rs.length === 1 ? " Rezept" : " Rezepte"))),
       h("ul", null, rs.map(r => {
         const time = (r.prep_min || 0) + (r.cook_min || 0);
         return h("li", null, h("a", { href: "#rezept-" + r.id, class: "ln" },
@@ -1634,7 +1635,7 @@ async function exportPdf(recipes, filename, book) {
   toast("PDF gespeichert");
 }
 // Jedes Rezept als eigene PDF, zusammen in einer ZIP-Datei (am Tablet/Handy direkt über Teilen)
-function sortedForPdf() { return state.recipes.slice().sort((a, b) => catCmp(a.category || "Ohne Kategorie", b.category || "Ohne Kategorie") || (a.title || "").localeCompare(b.title || "", "de")); }
+function sortedForPdf() { return state.recipes.filter(r => catRank(r.category) !== 2).sort((a, b) => catCmp(a.category || "Ohne Kategorie", b.category || "Ohne Kategorie") || (a.title || "").localeCompare(b.title || "", "de")); }
 async function shareApp() {
   const url = location.origin + location.pathname;
   if (navigator.share) { try { await navigator.share({ title: "Rezeptbuch", text: "Mein Rezeptbuch", url }); return; } catch (e) { if (e && e.name === "AbortError") return; } }

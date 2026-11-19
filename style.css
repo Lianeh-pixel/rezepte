@@ -683,3 +683,10 @@ a.rlink::after { content: " ›"; text-decoration: none; display: inline-block; 
 .ph-link .ic { width: 16px; height: 16px; }
 .ph-link.danger { color: var(--danger); }
 .ph-note { font-size: 13px; color: var(--muted); min-width: 0; }
+/* Draft: unfertige Entwürfe dezent abgesetzt */
+.toc section.draft { column-span: all; margin-top: 28px; padding-top: 6px; border-top: 1.5px dashed var(--line); }
+.toc .draft .chap { color: var(--muted); }
+.toc .draft .chap b { display: inline-flex; align-items: center; gap: 8px; font-weight: inherit; }
+.toc .draft .chap .ic { width: 17px; height: 17px; }
+.toc .draft .ln { color: var(--muted); font-style: italic; }
+@media (min-width: 900px) { .home .toc section.draft { margin-top: 18px; padding-top: 6px; } .home .toc .draft ul { columns: 2; column-gap: 72px; } }
