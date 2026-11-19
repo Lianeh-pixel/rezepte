@@ -333,7 +333,7 @@ function renderDetail(id) {
     h("button", { class: "d-fav" + (r.favorite ? " on" : ""), "aria-pressed": r.favorite ? "true" : "false", onclick: () => toggleFav(r) }, icon("heart", r.favorite), r.favorite ? "Favorit" : "Merken"));
 
   const nut = n ? h("div", { class: "d-nut", role: "list", "aria-label": r.servings ? "Nährwerte pro Portion" : "Nährwerte gesamt" },
-    NUT.filter(([k]) => k !== "sugar" && k !== "salt").map(([k, label, unit]) => h("div", { class: k === "kcal" ? "k" : null, role: "listitem" }, h("b", null, fmtNut(n.per[k], k) + unit), label))) : null;
+    NUT.filter(([k]) => k !== "sugar" && k !== "salt" && k !== "fiber").map(([k, label, unit]) => h("div", { class: k === "kcal" ? "k" : null, role: "listitem" }, h("b", null, fmtNut(n.per[k], k) + unit), label))) : null;
 
   const seg = h("div", { class: "seg", role: "tablist" },
     h("button", { role: "tab", "aria-selected": tab === "ing" ? "true" : "false", class: tab === "ing" ? "on" : null, onclick: () => { state.tab = "ing"; render(); } }, "Zutaten"),
@@ -437,14 +437,15 @@ function nutritionBlock(r) {
   const ings = (r.ingredients || []).filter(i => !i.section);
   if (!ings.length) return null;
   const n = computeNutrition(r);
-  const rows = [["kcal", "Brennwert", " kcal"], ["fat", "Fett", " g"], ["carbs", "Kohlenhydrate", " g"], ["sugar", "davon Zucker", " g", true], ["protein", "Eiweiß", " g"], ["fiber", "Ballaststoffe", " g"], ["salt", "Salz", " g"]];
+  const per = n.per;
+  const item = (label, k, sub) => h("span", { class: sub ? "nv sub" : "nv" }, label + " ", h("b", null, fmtNut(per[k], k) + " g"));
   const missNames = n.missing.map(x => x.i.name);
   return h("section", { class: "nut" },
-    h("h3", null, r.servings ? "Nährwerte pro Portion" : "Nährwerte (ganzes Rezept)"),
-    h("table", { class: "nut-table" }, h("tbody", null, rows.map(([k, label, unit, sub]) =>
-      h("tr", { class: sub ? "sub" : k === "kcal" ? "kcal" : null }, h("th", { scope: "row" }, label), h("td", null, fmtNut(n.per[k], k) + unit))))),
-    missNames.length ? h("p", { class: "nut-miss" }, "Nicht mitgerechnet: " + missNames.join(", ")) : null,
-    h("small", null, "Schätzwerte"),
+    h("p", { class: "nut-head" }, h("b", null, fmtNut(per.kcal, "kcal") + " kcal"), " " + (r.servings ? "pro Portion" : "ganzes Rezept")),
+    h("p", { class: "nut-vals" },
+      [item("Fett", "fat"), item("Kohlenhydrate", "carbs"), item("davon Zucker", "sugar", true),
+      item("Eiweiß", "protein"), item("Ballaststoffe", "fiber"), item("Salz", "salt")].flatMap(x => [x, " "])),
+    h("small", null, "Schätzwerte" + (missNames.length ? " · nicht mitgerechnet: " + missNames.join(", ") : "")),
     n.missing.some(x => !x.food) && state.online ? foodFormFor(n.missing.filter(x => !x.food).map(x => x.i.name)) : null);
 }
 function foodFormFor(names) {

@@ -260,3 +260,18 @@ button { cursor: pointer; }
 .d-ing li { grid-template-columns: 84px minmax(0, 1fr); gap: 14px; padding: 6px 0; border-bottom: 0; font-size: 17px; }
 .d-ing .qty { text-align: right; }
 .d-sec { margin: 22px 0 4px; padding-top: 14px; border-top: 1px solid var(--line); }
+
+/* Nährwerte: kleine ruhige Zeile, kein Kasten */
+.nut { margin-top: 26px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+.nut-head { margin: 0 0 4px; font-size: 13px; }
+.nut-head b { font-size: 15px; color: var(--fg); font-weight: 700; font-variant-numeric: tabular-nums; }
+.nut-vals { margin: 0; line-height: 1.7; }
+.nut-vals .nv { white-space: nowrap; margin-right: 12px; }
+.nut-vals .nv b { color: var(--fg); font-weight: 600; font-variant-numeric: tabular-nums; }
+.nut-vals .nv.sub { font-style: italic; }
+.nut small { font-size: 12px; margin-top: 4px; }
+/* Nährwert-Leiste oben: schlicht, ohne Kästen */
+.d-nut { gap: 14px; flex-wrap: wrap; overflow: visible; font-size: 12px; }
+.d-nut > div, .d-nut > div.k { background: none; border: 0; border-radius: 0; padding: 0; min-width: 0; color: var(--muted); }
+.d-nut b, .d-nut > div:not(.k) b { display: inline; font-family: inherit; font-size: 13px; font-weight: 600; color: var(--fg); margin-right: 3px; }
+.d-nut > div.k b { color: var(--basil); }
