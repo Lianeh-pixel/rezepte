@@ -94,7 +94,7 @@ function fmtQty(q) {
 // Kategorien sortieren: "Ohne Kategorie" und "Draft" immer ganz unten
 function catRank(c) { const n = String(c || "").trim().toLowerCase(); return n === "draft" ? 2 : n === "ohne kategorie" ? 1 : 0; }
 // Reihenfolge nach Verzehr: Frühstück, Vorspeise, Hauptgang mit Saucen und Grundrezepten, Nachtisch, Kaffee
-const CAT_ORDER = [/^brot|brötchen|frühstück|^teig|grund|basis/, /suppe|eintopf|vorspeise|salat/, /haupt|beilage/, /sauce|soße|dip/, /dessert|nachtisch/, /kuchen|gebäck|torte/, /kekse|plätzchen|cookies/];
+const CAT_ORDER = [/^brot|brötchen|frühstück|^teig|grund|basis/, /suppe|eintopf|vorspeise|salat/, /auflauf|aufläufe|pasta|nudel/, /fleisch|fisch/, /tofu|vegan|vegetar/, /gemüse/, /haupt/, /beilage/, /sauce|soße|dip/, /dessert|nachtisch/, /kuchen|gebäck|torte/, /kekse|plätzchen|cookies/];
 function catPos(c) { const k = String(c || "").toLowerCase(); const i = CAT_ORDER.findIndex(re => re.test(k)); return i < 0 ? CAT_ORDER.length : i; }
 function catCmp(a, b) { return catRank(a) - catRank(b) || catPos(a) - catPos(b) || String(a).localeCompare(String(b), "de"); }
 function consolidate(list) {
@@ -163,7 +163,7 @@ function scaled(r) { const base = r.servings || 0, now = state.servings[r.id] ||
 function fmtMin(m) { if (!m) return ""; return m >= 60 ? Math.floor(m / 60) + " Std." + (m % 60 ? " " + (m % 60) + " Min." : "") : m + " Min."; }
 function norm(s) { return (s || "").toLocaleLowerCase("de").normalize("NFD").replace(/[̀-ͯ]/g, ""); }
 // Standardbild je Kategorie
-const CAT_IMG = [[/kekse|plätzchen|cookies/, "kekse"], [/kuchen|gebäck|gebaeck/, "kuchen"], [/brot|brötchen|buns/, "brot"], [/dessert|nachtisch|süß/, "dessert"], [/haupt/, "hauptgericht"], [/suppe|eintopf/, "suppen"], [/sauce|soße|dip/, "saucen"], [/beilage|salat/, "beilagen"], [/grund|basis|teig/, "grundrezepte"]];
+const CAT_IMG = [[/kekse|plätzchen|cookies/, "kekse"], [/kuchen|gebäck|gebaeck/, "kuchen"], [/brot|brötchen|buns/, "brot"], [/dessert|nachtisch|süß/, "dessert"], [/haupt|auflauf|aufläufe|fleisch|fisch|tofu|gemüse/, "hauptgericht"], [/suppe|eintopf/, "suppen"], [/sauce|soße|dip/, "saucen"], [/beilage|salat/, "beilagen"], [/grund|basis|teig/, "grundrezepte"]];
 function catImage(c) { const k = String(c || "").toLowerCase(); const m = CAT_IMG.find(([re]) => re.test(k)); return m ? "icons/kat-" + m[1] + ".svg" : "icons/standard.svg"; }
 function photoSrc(r) { return r.photo_path ? (state.photoUrls[r.photo_path] || {}).url || "" : ""; }
 function heroGallery(r) {
