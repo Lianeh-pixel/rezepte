@@ -498,3 +498,20 @@ a.rlink::after { content: " ›"; text-decoration: none; display: inline-block; 
 .wrap.full .d-sheet { min-height: 70vh; }
 @media (min-width: 760px) { .d-dock { background: none; } .d-dock .btn { box-shadow: 0 8px 24px rgba(0,0,0,.25); } }
 .d-hero.noimg .round { background: rgba(10, 40, 42, .35); color: #fff; }
+/* Fotos per Knopf */
+.ph-open { position: relative; }
+.ph-n { position: absolute; top: -3px; right: -3px; min-width: 18px; height: 18px; border-radius: 9px; background: #fff; color: #11585c; font-size: 11px; font-weight: 700; display: grid; place-items: center; padding: 0 4px; }
+.pv { position: fixed; inset: 0; z-index: 70; background: rgba(8, 18, 19, .94); display: flex; align-items: center; justify-content: center; }
+.pv-stage { position: relative; width: 100%; height: 100%; max-width: 1200px; }
+.pv-stage > img, .pv-stage .gal img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain !important; }
+.pv-stage .gal-dots { bottom: calc(24px + env(safe-area-inset-bottom, 0px)); }
+.pv-x { position: absolute; top: calc(14px + env(safe-area-inset-top, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); font-size: 28px; line-height: 1; background: rgba(255,255,255,.14); color: #fff; }
+/* Kopfbereich mit Kategoriebild: flacher */
+.d-hero.noimg { height: calc(190px + env(safe-area-inset-top, 0px)); min-height: 0; }
+@media (min-width: 760px) { .d-hero.noimg { height: 230px; } }
+@media (min-width: 1000px) and (orientation: landscape) { .d-hero.noimg { height: 230px; min-height: 0; } }
+/* weicher Übergang vom Kopfbild in den Hintergrund */
+.d-hero.noimg { background: transparent; -webkit-mask-image: linear-gradient(180deg, #000 55%, transparent 100%); mask-image: linear-gradient(180deg, #000 55%, transparent 100%); }
+.d-hero.noimg .d-bar { z-index: 3; }
+.d-blur::after { display: none; } .d-blur { filter: blur(30px); }
+.d-blur::after { display: block; background: linear-gradient(180deg, rgba(255,255,255,0) 15%, rgba(225,245,244,.6) 100%); }

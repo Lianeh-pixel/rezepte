@@ -154,6 +154,14 @@ function heroGallery(r) {
   track.addEventListener("scroll", () => { const k = Math.round(track.scrollLeft / track.clientWidth); [...dots.children].forEach((d, j) => d.classList.toggle("on", j === k)); }, { passive: true });
   return [track, dots];
 }
+function openPhotos(r) {
+  const close = () => { ov.remove(); document.removeEventListener("keydown", esc); };
+  const esc = e => { if (e.key === "Escape") close(); };
+  const ov = h("div", { class: "pv", role: "dialog", "aria-modal": "true", "aria-label": "Fotos" },
+    h("div", { class: "pv-stage" }, heroGallery(r)),
+    h("button", { class: "round pv-x", "aria-label": "Schließen", onclick: close }, "×"));
+  document.body.append(ov); document.addEventListener("keydown", esc);
+}
 function photoPaths(r) { return [r.photo_path, ...(r.photos || [])].filter(Boolean); }
 function urlFor(path) { return (state.photoUrls[path] || {}).url || ""; }
 function categories() { const s = new Set(); state.recipes.forEach(r => r.category && s.add(r.category)); return [...s].sort((a, b) => a.localeCompare(b, "de")); }
@@ -447,6 +455,7 @@ const ICONS = {
   camera: '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
   crop: '<path d="M6 2v16h16M2 6h16v16"/>',
   trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+  image: '<rect x="3" y="5" width="18" height="14" rx="3"/><circle cx="9" cy="10" r="1.8"/><path d="M21 16l-5-5-8 8"/>',
   link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>'
 };
 function icon(name, filled) {
@@ -468,11 +477,13 @@ function renderDetail(id) {
   const total = (r.prep_min || 0) + (r.cook_min || 0);
   const n = (r.ingredients || []).some(i => !i.section) ? computeNutrition(r) : null;
 
-  const hero = h("div", { class: "d-hero" + (src ? "" : " noimg") },
-    src ? heroGallery(r) : h("img", { src: catImage(r.category), alt: "", class: "std" }),
+  const nPh = photoPaths(r).length;
+  const hero = h("div", { class: "d-hero noimg" },
+    h("img", { src: catImage(r.category), alt: "", class: "std" }),
     h("div", { class: "d-bar" },
       h("button", { class: "round", "aria-label": "Zurück", onclick: () => go("") }, icon("back")),
       h("div", null,
+        src ? h("button", { class: "round ph-open", "aria-label": nPh > 1 ? nPh + " Fotos ansehen" : "Foto ansehen", onclick: () => openPhotos(r) }, icon("image"), nPh > 1 ? h("span", { class: "ph-n" }, String(nPh)) : null) : null,
         h("button", { class: "round" + (r.favorite ? " fav-on" : ""), "aria-label": r.favorite ? "Favorit entfernen" : "Als Favorit merken", "aria-pressed": r.favorite ? "true" : "false", onclick: () => toggleFav(r) }, icon("heart", r.favorite)),
         h("button", { class: "round", "aria-label": "Als PDF teilen", onclick: () => exportPdf([r], safeName(r.title) + ".pdf") }, icon("share")),
         h("button", { class: "round", "aria-label": "Bearbeiten", onclick: () => go("bearbeiten-" + r.id), disabled: !state.online }, icon("pen")))));
@@ -519,7 +530,7 @@ function renderDetail(id) {
       h("section", { class: "d-col-steps" }, h("h3", { class: "d-colh" }, "Zubereitung"), body));
   }
 
-  app.append(h("div", { class: "d-blur", "aria-hidden": "true", style: "background-image:url('" + String(src || catImage(r.category)).replace(/'/g, "%27") + "')" }));
+  app.append(h("div", { class: "d-blur", "aria-hidden": "true", style: "background-image:url('" + String(catImage(r.category)).replace(/'/g, "%27") + "')" }));
   app.append(hero, h("div", { class: "d-sheet" },
     h("div", { class: "grab", "aria-hidden": "true" }),
     r.category ? h("div", { class: "sec" }, r.category) : null,
@@ -1182,7 +1193,7 @@ document.addEventListener("keydown", e => {
 // Rezeptansicht: Wischen. Zur rechten Seite (Finger nach links) -> Zubereitung, zur linken Seite (Finger nach rechts) -> Zutaten bzw. Inhaltsverzeichnis
 let swipe = null;
 document.addEventListener("touchstart", e => {
-  if (state.cook || state.route.view !== "detail" || e.touches.length !== 1 || e.target.closest(".gal, .d-hero, input, textarea, .servings, .dlg-ov")) { swipe = null; return; }
+  if (state.cook || state.route.view !== "detail" || e.touches.length !== 1 || e.target.closest(".gal, .d-hero, input, textarea, .servings, .dlg-ov, .pv")) { swipe = null; return; }
   swipe = { x: e.touches[0].clientX, y: e.touches[0].clientY };
 }, { passive: true });
 document.addEventListener("touchend", e => {
