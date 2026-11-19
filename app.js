@@ -407,7 +407,6 @@ function renderList() {
         h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; render(); shareApp(); } }, "Rezeptbuch teilen"),
         state.recipes.length ? h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; render(); exportPdf(state.recipes, "Rezeptbuch.pdf"); } }, "Alle in einer PDF") : null,
         state.recipes.length ? h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; render(); exportPdfEach(sortedForPdf()); } }, "Alle als einzelne PDFs") : null,
-        isGuest() ? null : h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; render(); pickImportPhotos(); } }, "Fotos aus anderer Quelle übernehmen"),
         isGuest() ? h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; go("anmelden"); } }, "Anmelden")
           : h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; logout(); } }, "Abmelden")) : null)));
   if (state.loadError) app.append(h("div", { class: "notice" }, state.loadError));
