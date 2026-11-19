@@ -406,7 +406,6 @@ function renderList() {
       menuOpen ? h("div", { class: "h-menu", role: "menu" },
         h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; render(); shareApp(); } }, "Rezeptbuch teilen"),
         state.recipes.length ? h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; render(); exportPdf(sortedForPdf(), "Rezeptbuch.pdf", true); } }, "Alle in einer PDF") : null,
-        state.recipes.length ? h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; render(); exportPdfEach(sortedForPdf()); } }, "Alle als einzelne PDFs") : null,
         isGuest() ? h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; go("anmelden"); } }, "Anmelden")
           : h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; logout(); } }, "Abmelden")) : null)));
   if (state.loadError) app.append(h("div", { class: "notice" }, state.loadError));
