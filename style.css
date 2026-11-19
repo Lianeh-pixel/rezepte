@@ -673,3 +673,13 @@ a.rlink::after { content: " ›"; text-decoration: none; display: inline-block; 
 .h-fav { border: 0; background: none; padding: 0; width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center; color: var(--basil); cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .h-fav svg { width: 28px; height: 28px; }
 .h-tools { gap: 14px; }
+/* Bearbeiten: Foto-Knopf oben rechts statt großer Fläche */
+.f-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; align-self: stretch; }
+.f-top .back { margin-bottom: 0; }
+.f-cam { position: relative; color: var(--basil); background: var(--sunk); border: 1px solid var(--line); }
+.f-cam .ph-n { position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--btn); color: var(--basil-ink); font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.ph-acts2 { display: flex; align-items: center; gap: 18px; padding-top: 8px; flex-wrap: wrap; }
+.ph-link { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 14px; font-weight: 600; color: var(--basil); background: none; border: 0; padding: 4px 0; cursor: pointer; }
+.ph-link .ic { width: 16px; height: 16px; }
+.ph-link.danger { color: var(--danger); }
+.ph-note { font-size: 13px; color: var(--muted); min-width: 0; }

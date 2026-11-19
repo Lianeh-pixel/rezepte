@@ -91,6 +91,9 @@ function fmtQty(q) {
   const r = q >= 100 ? Math.round(q) : q >= 10 ? Math.round(q * 2) / 2 : Math.round(q * 10) / 10;
   return String(r).replace(".", ",");
 }
+// Kategorien sortieren: "Ohne Kategorie" und "Draft" immer ganz unten
+function catRank(c) { const n = String(c || "").trim().toLowerCase(); return n === "draft" ? 2 : n === "ohne kategorie" ? 1 : 0; }
+function catCmp(a, b) { return catRank(a) - catRank(b) || String(a).localeCompare(String(b), "de"); }
 function consolidate(list) {
   const out = [], by = new Map();
   list.filter(i => !i.section && (i.name || i.qty != null)).forEach(i => {
@@ -432,7 +435,7 @@ function renderGridOnly() {
   if (!list.length) { host.replaceChildren(h("div", { class: "empty" }, h("h2", null, "Nichts gefunden"), h("p", null, state.favOnly ? "Unter deinen Favoriten passt nichts. Tipp oben auf „Alle zeigen“." : "Versuch einen anderen Suchbegriff."))); return; }
   const groups = new Map();
   list.forEach(r => { const c = r.category || "Ohne Kategorie"; if (!groups.has(c)) groups.set(c, []); groups.get(c).push(r); });
-  const names = [...groups.keys()].sort((a, b) => a === "Ohne Kategorie" ? 1 : b === "Ohne Kategorie" ? -1 : a.localeCompare(b, "de"));
+  const names = [...groups.keys()].sort(catCmp);
   host.replaceChildren(h("div", { class: "toc" }, names.map(c => {
     const rs = groups.get(c).sort((a, b) => a.title.localeCompare(b.title, "de"));
     return h("section", null,
@@ -990,26 +993,24 @@ function renderForm(id) {
       P()[i] = newItem(blob, srcBlob); drawPhoto();
     } catch (e) { toast("Das Foto konnte nicht geladen werden."); }
   };
+  const camBtn = h("button", { type: "button", class: "round f-cam", "aria-label": "Fotos hinzufügen", onclick: () => pick(-1) });
   function drawPhoto() {
     const list = P(); if (state.photoSel >= list.length) state.photoSel = Math.max(0, list.length - 1);
-    const i = state.photoSel, d = list[i];
-    photoBox.replaceChildren(
-      d
-        ? h("div", { class: "ph-img" }, h("img", { src: srcOf(d), alt: "Foto" }),
-            i === 0 && list.length > 1 ? h("span", { class: "ph-badge" }, "Titelbild") : null,
-            h("div", { class: "ph-acts" },
-              i > 0 ? h("button", { type: "button", class: "ph-btn", onclick: () => { list.unshift(list.splice(i, 1)[0]); state.photoSel = 0; drawPhoto(); } }, "Als Titelbild") : null,
-              h("button", { type: "button", class: "ph-btn", onclick: editCurrent }, icon("crop"), "Bearbeiten"),
-              h("button", { type: "button", class: "ph-btn", "aria-label": "Foto entfernen", onclick: () => { const x = list.splice(i, 1)[0]; x.previewUrl && URL.revokeObjectURL(x.previewUrl); drawPhoto(); } }, icon("trash"))))
-        : h("button", { type: "button", class: "ph-empty", onclick: () => pick(-1) }, icon("camera"), h("span", null, "Fotos hinzufügen")),
+    const i = state.photoSel;
+    camBtn.replaceChildren(...[icon("camera"), list.length ? h("span", { class: "ph-n" }, String(list.length)) : null].filter(Boolean));
+    photoBox.hidden = !list.length;
+    photoBox.replaceChildren(...[
       list.length ? h("div", { class: "ph-strip" },
-        list.map((x, k) => h("button", { type: "button", class: "ph-th" + (k === i ? " on" : ""), "aria-label": "Foto " + (k + 1), onclick: () => { state.photoSel = k; drawPhoto(); } }, h("img", { src: srcOf(x), alt: "" }))),
-        h("button", { type: "button", class: "ph-th ph-add", "aria-label": "Fotos hinzufügen", onclick: () => pick(-1) }, "+")) : null,
-      fileIn);
+        list.map((x, k) => h("button", { type: "button", class: "ph-th" + (k === i ? " on" : ""), "aria-label": "Foto " + (k + 1) + (k === 0 ? " (Titelbild)" : ""), onclick: () => { state.photoSel = k; drawPhoto(); } }, h("img", { src: srcOf(x), alt: "" })))) : null,
+      list.length ? h("div", { class: "ph-acts2" },
+        i > 0 ? h("button", { type: "button", class: "ph-link", onclick: () => { list.unshift(list.splice(i, 1)[0]); state.photoSel = 0; drawPhoto(); } }, "Als Titelbild") : h("span", { class: "ph-note" }, list.length > 1 ? "Titelbild" : ""),
+        h("button", { type: "button", class: "ph-link", onclick: editCurrent }, icon("crop"), "Bearbeiten"),
+        h("button", { type: "button", class: "ph-link danger", onclick: () => { const x = list.splice(i, 1)[0]; x.previewUrl && URL.revokeObjectURL(x.previewUrl); drawPhoto(); } }, icon("trash"), "Entfernen")) : null,
+      fileIn].filter(Boolean));
   }
   drawPhoto();
   const form = h("form", { class: "form", id: "recipe-form", novalidate: true },
-    h("button", { type: "button", class: "btn ghost back", onclick: () => r ? go("rezept-" + r.id) : go("") }, "← Abbrechen"),
+    h("div", { class: "f-top" }, h("button", { type: "button", class: "btn ghost back", onclick: () => r ? go("rezept-" + r.id) : go("") }, "← Abbrechen"), camBtn),
     photoBox,
     h("input", { id: "f-title", class: "f-title", value: v.title || "", required: true, placeholder: "Name des Rezepts", "aria-label": "Titel" }),
     h("div", { class: "meta-list" },
@@ -1633,7 +1634,7 @@ async function exportPdf(recipes, filename, book) {
   toast("PDF gespeichert");
 }
 // Jedes Rezept als eigene PDF, zusammen in einer ZIP-Datei (am Tablet/Handy direkt über Teilen)
-function sortedForPdf() { return state.recipes.slice().sort((a, b) => { const ca = a.category || "~", cb = b.category || "~"; return ca.localeCompare(cb, "de") || (a.title || "").localeCompare(b.title || "", "de"); }); }
+function sortedForPdf() { return state.recipes.slice().sort((a, b) => catCmp(a.category || "Ohne Kategorie", b.category || "Ohne Kategorie") || (a.title || "").localeCompare(b.title || "", "de")); }
 async function shareApp() {
   const url = location.origin + location.pathname;
   if (navigator.share) { try { await navigator.share({ title: "Rezeptbuch", text: "Mein Rezeptbuch", url }); return; } catch (e) { if (e && e.name === "AbortError") return; } }
