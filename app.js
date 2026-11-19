@@ -75,13 +75,14 @@ function ingToLine(i) { return i.section ? i.section + ":" : [fmtQty(i.qty), i.u
 function normWord(w) { return w.toLowerCase().replace(/ä/g, "a").replace(/ö/g, "o").replace(/ü/g, "u").replace(/ß/g, "ss").replace(/(en|n|e|s)$/, ""); }
 const STOP = new Set(["und", "mit", "den", "dem", "der", "die", "das", "ein", "eine", "einer", "einem", "einen", "auf", "aus", "bei", "bis", "für", "von", "zum", "zur", "ihn", "sie", "alle", "alles", "etwas", "nach", "noch", "dann", "darin", "dazu", "oder", "nicht", "gut", "kurz", "lang", "min", "std", "grad", "minuten", "stunde", "stunden", "geben", "lassen"]);
 function wordsOf(t) { return (t.match(/[A-Za-zÄÖÜäöüß]+/g) || []).filter(w => w.length >= 3 && !STOP.has(w.toLowerCase())).map(normWord).filter(w => w.length >= 3); }
-function stepIngredients(r, text) {
+function stepIngredients(r, text, stepSec) {
   const tw = wordsOf(text); if (!tw.length) return [];
   let sec = "", items = [];
   (r.ingredients || []).forEach(i => { if (i.section) sec = i.section; else items.push({ i, sec }); });
   const secs = [...new Set(items.map(x => x.sec).filter(Boolean))];
   const lower = text.toLowerCase();
-  const named = secs.filter(s => wordsOf(s).some(w => tw.includes(w)) || lower.includes(s.toLowerCase()));
+  const linked = stepSec ? secs.filter(s => s.toLowerCase() === stepSec.toLowerCase()) : [];
+  const named = linked.length ? linked : secs.filter(s => wordsOf(s).some(w => tw.includes(w)) || lower.includes(s.toLowerCase()));
   if (named.length) items = items.filter(x => named.includes(x.sec) || !x.sec);
   const hits = items.filter(({ i }) => {
     const nw = wordsOf(i.name || ""); if (!nw.length) return false;
@@ -92,10 +93,14 @@ function stepIngredients(r, text) {
   const best = {}; hits.forEach(x => { const k = (x.i.name || "").toLowerCase(); if (!best[k] || cnt[x.sec] > cnt[best[k].sec]) best[k] = x; });
   return hits.filter(x => best[(x.i.name || "").toLowerCase()] === x).map(x => x.i);
 }
-function stepIngLine(r, text, f, cls) {
-  const list = stepIngredients(r, text); if (!list.length) return null;
+function stepIngLine(r, text, f, cls, sec) {
+  const list = stepIngredients(r, text, sec); if (!list.length) return null;
   return h("p", { class: cls }, list.map((i, k) => [k ? " · " : "", h("b", null, [fmtQty(i.qty != null ? i.qty * f : null), i.unit].filter(Boolean).join(" ")), (i.qty != null || i.unit ? " " : "") + i.name]));
 }
+// Zubereitung: Abschnitte werden als Eintrag "# Name" in steps gespeichert
+const isStepSec = s => typeof s === "string" && /^#\s/.test(s);
+function stepList(r) { let sec = ""; const out = []; (r.steps || []).forEach(s => { if (isStepSec(s)) sec = s.replace(/^#\s*/, "").trim(); else out.push({ text: s, sec }); }); return out; }
+function stepGroups(r) { const g = []; let cur = { title: "", items: [] }; (r.steps || []).forEach(s => { if (isStepSec(s)) { if (cur.items.length || cur.title) g.push(cur); cur = { title: s.replace(/^#\s*/, "").trim(), items: [] }; } else cur.items.push(s); }); if (cur.items.length || cur.title || !g.length) g.push(cur); return g; }
 function scaled(r) { const base = r.servings || 0, now = state.servings[r.id] || base; return base ? now / base : 1; }
 function fmtMin(m) { if (!m) return ""; return m >= 60 ? Math.floor(m / 60) + " Std." + (m % 60 ? " " + (m % 60) + " Min." : "") : m + " Min."; }
 function norm(s) { return (s || "").toLocaleLowerCase("de").normalize("NFD").replace(/[̀-ͯ]/g, ""); }
@@ -382,7 +387,10 @@ function renderDetail(id) {
           h("span", null, i.name))))]) : h("p", { class: "meta" }, "Keine Zutaten eingetragen."),
       nutritionBlock(r));
   } else {
-    body = (r.steps || []).length ? h("ol", { class: "steps" }, r.steps.map(s => h("li", null, h("div", null, h("p", null, s), stepIngLine(r, s, f, "step-ings"))))) : h("p", { class: "meta" }, "Keine Schritte eingetragen.");
+    body = stepList(r).length ? h("div", { class: "steps-wrap" }, stepGroups(r).filter(g => g.items.length).map((g, gi) => [
+        g.title ? h("div", { class: "sec" + (gi > 0 ? " d-sec" : "") }, g.title) : null,
+        h("ol", { class: "steps" }, g.items.map(s => h("li", null, h("div", null, h("p", null, s), stepIngLine(r, s, f, "step-ings", g.title)))))]))
+      : h("p", { class: "meta" }, "Keine Schritte eingetragen.");
   }
 
   app.append(hero, h("div", { class: "d-sheet" },
@@ -393,7 +401,7 @@ function renderDetail(id) {
     r.notes ? h("p", { class: "notes" }, r.notes) : null,
     nut, seg, body,
     r.source ? h("div", { class: "meta d-src" }, "Quelle: ", /^https?:\/\//.test(r.source) ? h("a", { href: r.source, target: "_blank", rel: "noopener" }, r.source.replace(/^https?:\/\/(www\.)?/, "").slice(0, 50)) : r.source) : null,
-    (r.steps || []).length ? h("div", { class: "d-dock" }, h("button", { class: "btn primary", onclick: () => openCook(r) }, icon("play"), "Kochmodus starten")) : null));
+    stepList(r).length ? h("div", { class: "d-dock" }, h("button", { class: "btn primary", onclick: () => openCook(r) }, icon("play"), "Kochmodus starten")) : null));
 }
 
 // ---------- nutrition ----------
@@ -498,11 +506,82 @@ function foodFormFor(names) {
 
 // ---------- form ----------
 function clearDraftPhoto() { if (state.draftPhoto && state.draftPhoto.previewUrl) URL.revokeObjectURL(state.draftPhoto.previewUrl); state.draftPhoto = null; }
+function ingEditor(list) {
+  const groups = []; let cur = { title: "", items: [] };
+  list.forEach(i => { if (i.section) { if (cur.items.length || cur.title) groups.push(cur); cur = { title: i.section, items: [] }; } else cur.items.push(i); });
+  if (cur.items.length || cur.title || !groups.length) groups.push(cur);
+  const hidden = h("textarea", { id: "f-ing", hidden: "" });
+  const boxes = h("div", { class: "ing-boxes", id: "ing-boxes" });
+  const sync = () => {
+    const parts = [...boxes.children].map(b => {
+      const t = b.querySelector("input").value.trim().replace(/:+$/, "");
+      const body = b.querySelector("textarea").value.split("\n").map(l => l.trim()).filter(Boolean)
+        .map(l => /:$/.test(l) ? l.replace(/:+$/, "") : l).join("\n"); // Doppelpunkt innerhalb einer Box ist kein Abschnitt
+      return (t ? t + ":\n" : "") + body;
+    });
+    hidden.value = parts.filter(Boolean).join("\n");
+    boxes.classList.toggle("multi", boxes.children.length > 1);
+  };
+  const box = (g, focus) => {
+    const name = h("input", { type: "text", class: "ing-box-name", placeholder: "Abschnitt, z. B. Teig", "aria-label": "Name des Abschnitts", value: g.title || "" });
+    const ta = h("textarea", { rows: String(Math.max(4, g.items.length + 1)), placeholder: "200 g Mehl\n2 Eier\n1 Prise Salz", "aria-label": "Zutaten" }, g.items.map(ingToLine).join("\n"));
+    const del = h("button", { type: "button", class: "ing-box-del", "aria-label": "Abschnitt entfernen", title: "Abschnitt entfernen", onclick: e => {
+      e.preventDefault();
+      if (ta.value.trim() && del.dataset.sure !== "1") { del.dataset.sure = "1"; del.textContent = "Wirklich entfernen?"; return; }
+      el.remove(); sync();
+    } }, "Entfernen");
+    const el = h("div", { class: "ing-box" }, h("div", { class: "ing-box-head" }, name, del), ta);
+    name.addEventListener("input", sync); ta.addEventListener("input", sync);
+    boxes.append(el);
+    if (focus) setTimeout(() => name.focus(), 0);
+  };
+  groups.forEach(g => box(g));
+  sync();
+  return h("div", { class: "ing-edit" }, boxes, hidden,
+    h("button", { type: "button", class: "btn", onclick: e => { e.preventDefault(); box({ title: "", items: [] }, true); sync(); } }, "+ Abschnitt"));
+}
+function splitSteps(t) { let a = t.split(/\n\s*\n/).map(s => s.trim()).filter(Boolean); if (a.length === 1 && a[0].includes("\n")) a = a[0].split("\n").map(s => s.trim()).filter(Boolean); return a; }
+function readSteps() {
+  const out = [];
+  document.querySelectorAll("#step-boxes .ing-box").forEach(b => {
+    const t = b.querySelector("input").value.trim().replace(/^#+\s*/, "").replace(/:+$/, "");
+    const items = splitSteps(b.querySelector("textarea").value).map(s => s.replace(/^#+\s+/, ""));
+    if (!items.length) return;
+    if (t) out.push("# " + t);
+    out.push(...items);
+  });
+  return out;
+}
+function ingSectionNames() {
+  return [...document.querySelectorAll("#ing-boxes .ing-box-name")].map(i => i.value.trim().replace(/:+$/, "")).filter(Boolean);
+}
+function stepEditor(v) {
+  const boxes = h("div", { class: "ing-boxes", id: "step-boxes" });
+  const dl = h("datalist", { id: "secnames" });
+  const refreshNames = () => dl.replaceChildren(...ingSectionNames().map(n => h("option", { value: n })));
+  const mark = () => boxes.classList.toggle("multi", boxes.children.length > 1);
+  const box = (g, focus) => {
+    const name = h("input", { type: "text", class: "ing-box-name", list: "secnames", placeholder: "Abschnitt, z. B. Belag", "aria-label": "Name des Abschnitts", value: g.title || "" });
+    name.addEventListener("focus", refreshNames);
+    const ta = h("textarea", { rows: String(Math.max(5, g.items.length * 2 + 1)), placeholder: "Ofen auf 180 °C vorheizen.\n\nMehl und Eier verrühren.", "aria-label": "Schritte" }, g.items.join("\n\n"));
+    const del = h("button", { type: "button", class: "ing-box-del", onclick: e => {
+      e.preventDefault();
+      if (ta.value.trim() && del.dataset.sure !== "1") { del.dataset.sure = "1"; del.textContent = "Wirklich entfernen?"; return; }
+      el.remove(); mark();
+    } }, "Entfernen");
+    const el = h("div", { class: "ing-box" }, h("div", { class: "ing-box-head" }, name, del), ta);
+    boxes.append(el); mark();
+    if (focus) setTimeout(() => name.focus(), 0);
+  };
+  stepGroups(v).forEach(g => box(g));
+  return h("div", { class: "ing-edit" }, boxes, dl,
+    h("button", { type: "button", class: "btn", onclick: e => { e.preventDefault(); box({ title: "", items: [] }, true); } }, "+ Abschnitt"));
+}
 function renderForm(id) {
   const r = id ? findRecipe(id) : null;
   if (id && !r) { app.append(h("button", { class: "btn ghost back", onclick: () => go("") }, "← Alle Rezepte"), h("div", { class: "empty" }, h("h2", null, state.loaded ? "Rezept nicht gefunden" : "Wird geladen …"))); return; }
   const v = r || {};
-  const fld = (label, control, hint) => h("label", { class: "field" }, h("span", null, label), control, hint ? h("small", null, hint) : null);
+  const fld = (label, control, hint) => h(control.classList && control.classList.contains("ing-edit") ? "div" : "label", { class: "field" }, h("span", null, label), control, hint ? h("small", null, hint) : null);
   const inp = (fid, val, extra) => h("input", Object.assign({ id: fid, value: val == null ? "" : val }, extra || {}));
   const dl = h("datalist", { id: "catlist" }, ["Frühstück","Vorspeise","Hauptgericht","Beilage","Suppe","Salat","Dessert","Kuchen & Gebäck","Brot","Getränk","Snack", ...categories()].filter((x, i, a) => a.indexOf(x) === i).map(c => h("option", { value: c })));
   const photoBox = h("div", { class: "photo-pick" });
@@ -531,19 +610,10 @@ function renderForm(id) {
       fld("Kochen/Backen (Min.)", inp("f-cook", v.cook_min, { type: "number", min: "0", inputmode: "numeric" }))),
     dl,
     fld("Tags", inp("f-tags", (v.tags || []).join(", "), { placeholder: "vegetarisch, schnell, Weihnachten" }), "Mit Komma trennen."),
-    fld("Zutaten", h("div", { class: "ing-edit" },
-      h("textarea", { id: "f-ing", rows: "10", placeholder: "Boden:\n200 g Mehl\n2 Eier\n1 Prise Salz\n\nBelag:\n1 kg Äpfel\n1 TL Zimt" }, (v.ingredients || []).map((i, k) => (i.section && k > 0 ? "\n" : "") + ingToLine(i)).join("\n")),
-      h("button", { type: "button", class: "btn", onclick: e => {
-        e.preventDefault();
-        const ta = document.getElementById("f-ing"), name = "Neuer Abschnitt";
-        const before = ta.value.replace(/\s+$/, "");
-        ta.value = (before ? before + "\n\n" : "") + name + ":\n";
-        const start = ta.value.length - name.length - 2;
-        ta.focus(); ta.setSelectionRange(start, start + name.length);
-      } }, "+ Abschnitt (z. B. Boden, Belag)")),
-      "Eine Zutat pro Zeile, Menge zuerst (z. B. 200 g Mehl). Ein Abschnitt ist eine Zeile mit Doppelpunkt am Ende, z. B. „Boden:“. Alles darunter gehört zu diesem Abschnitt."),
-    fld("Zubereitung", h("textarea", { id: "f-steps", rows: "10", placeholder: "Ofen auf 180 °C vorheizen.\n\nMehl und Eier verrühren." }, (v.steps || []).join("\n\n")),
-      "Jeder Absatz (Leerzeile dazwischen) wird ein Schritt."),
+    fld("Zutaten", ingEditor(v.ingredients || []),
+      "Eine Zutat pro Zeile, Menge zuerst (z. B. 200 g Mehl). Den Namen des Abschnitts kannst du leer lassen, wenn es nur einen gibt."),
+    fld("Zubereitung", stepEditor(v),
+      "Jeder Absatz (Leerzeile dazwischen) wird ein Schritt. Heißt ein Abschnitt hier genauso wie bei den Zutaten, werden dessen Zutaten bei den Schritten angezeigt."),
     fld("Notizen", h("textarea", { id: "f-notes", rows: "3", placeholder: "Tipps, Varianten, was beim letzten Mal anders war" }, v.notes || "")),
     fld("Quelle", inp("f-src", v.source, { placeholder: "Webseite, Buch oder Person" })),
     state.formError ? h("p", { class: "err", role: "alert" }, state.formError) : null,
@@ -590,10 +660,9 @@ async function saveRecipe(existing, form) {
     title, category: val("f-cat").trim(), servings: num(val("f-serv")), prep_min: num(val("f-prep")), cook_min: num(val("f-cook")),
     tags: val("f-tags").split(",").map(t => t.trim()).filter(Boolean),
     ingredients: val("f-ing").split("\n").map(parseIngredient).filter(Boolean),
-    steps: val("f-steps").split(/\n\s*\n/).map(s => s.trim()).filter(Boolean),
+    steps: readSteps(),
     notes: val("f-notes").trim(), source: val("f-src").trim()
   };
-  if (data.steps.length === 1 && data.steps[0].includes("\n")) data.steps = data.steps[0].split("\n").map(s => s.trim()).filter(Boolean);
   state.saving = true;
   const btn = form.querySelector('button[type="submit"]'); if (btn) { btn.disabled = true; btn.textContent = "Wird gespeichert …"; }
   let oldPhoto = null;
@@ -671,11 +740,11 @@ function drawCook() {
   const c = state.cook; if (!c) return;
   let el = document.getElementById("cook");
   if (!el) { el = h("div", { class: "cook", id: "cook", role: "dialog", "aria-modal": "true", "aria-label": "Kochmodus" }); document.body.append(el); }
-  const steps = c.r.steps || [], total = steps.length + 1, pos = c.step + 1;
+  const steps = stepList(c.r), total = steps.length + 1, pos = c.step + 1;
   const main = c.step < 0
     ? [h("div", { class: "cook-label" }, "Zutaten bereitlegen" + (c.r.servings ? " · " + Math.round(c.r.servings * c.f) + " Portionen" : "")),
        h("ul", { class: "cook-ings" }, (c.r.ingredients || []).map(i => i.section ? h("li", null, h("span", { class: "cook-label" }, i.section)) : h("li", null, h("b", null, [fmtQty(i.qty != null ? i.qty * c.f : null), i.unit].filter(Boolean).join(" ")), " ", i.name)))]
-    : [h("div", { class: "cook-label" }, "Schritt " + (c.step + 1) + " von " + steps.length), h("p", { class: "cook-text" }, steps[c.step]), stepIngLine(c.r, steps[c.step], c.f, "cook-step-ings")];
+    : [h("div", { class: "cook-label" }, (steps[c.step].sec ? steps[c.step].sec + " · " : "") + "Schritt " + (c.step + 1) + " von " + steps.length), h("p", { class: "cook-text" }, steps[c.step].text), stepIngLine(c.r, steps[c.step].text, c.f, "cook-step-ings", steps[c.step].sec)];
   el.replaceChildren(
     h("div", { class: "cook-top" }, h("h2", null, c.r.title), h("button", { class: "btn", onclick: closeCook }, "Beenden")),
     h("div", { class: "cook-progress", "aria-hidden": "true" }, h("div", { style: "width:" + Math.round(pos / total * 100) + "%" })),
@@ -690,7 +759,7 @@ function drawCook() {
 document.addEventListener("keydown", e => {
   const c = state.cook; if (!c) return;
   if (e.key === "Escape") closeCook();
-  else if (e.key === "ArrowRight" && c.step < (c.r.steps || []).length - 1) { c.step++; drawCook(); }
+  else if (e.key === "ArrowRight" && c.step < stepList(c.r).length - 1) { c.step++; drawCook(); }
   else if (e.key === "ArrowLeft" && c.step >= 0) { c.step--; drawCook(); }
 });
 let touchX = null;
@@ -699,7 +768,7 @@ document.addEventListener("touchend", e => {
   const c = state.cook; if (!c || touchX == null) return;
   const dx = e.changedTouches[0].clientX - touchX; touchX = null;
   if (Math.abs(dx) < 60) return;
-  if (dx < 0 && c.step < (c.r.steps || []).length - 1) c.step++;
+  if (dx < 0 && c.step < stepList(c.r).length - 1) c.step++;
   else if (dx > 0 && c.step >= 0) c.step--;
   else return;
   drawCook();
@@ -763,10 +832,10 @@ async function exportPdf(recipes, filename) {
     const ing = (r.ingredients || []);
     font("times", "normal", 11);
     const ingRows = ing.map(i => i.section ? { sec: pdfText(i.section) } : { q: pdfText([fmtQty(i.qty), i.unit].filter(Boolean).join(" ")), name: wrap(i.name, LW - QW - 2), nameRaw: pdfText(i.name) });
-    const stepRows = (r.steps || []).map(s => wrap(s, RW - 8));
+    const stepRows = (r.steps || []).map(s => isStepSec(s) ? { sec: pdfText(s.replace(/^#\s*/, "").trim()) } : wrap(s, RW - 8));
     const nut = ing.some(i => !i.section) ? computeNutrition(r) : null;
     const ingH = 10 + ingRows.reduce((s, x) => s + (x.sec ? 7 : x.name.length * 4.8 + 1.2), 0) + (nut ? 50 : 0);
-    const stepH = stepRows.length ? 10 + stepRows.reduce((s, ls) => s + ls.length * 5.2 + 3, 0) : 0;
+    const stepH = stepRows.length ? 10 + stepRows.reduce((s, ls) => s + (ls.sec ? 7 : ls.length * 5.2 + 3), 0) : 0;
     // Foto: so hoch, dass Zutaten und Zubereitung möglichst noch auf dieselbe Seite passen
     font("times", "italic", 11, GREY);
     const noteLines = r.notes ? wrap(r.notes, CW - 20) : [];
@@ -837,9 +906,11 @@ async function exportPdf(recipes, filename) {
     };
     const drawSteps = (x, top, width) => {
       let yy = heading("Zubereitung", x, top, width);
-      stepRows.forEach((ls, k) => {
+      let k = 0;
+      stepRows.forEach(ls => {
+        if (ls.sec) { yy += 2; font("helvetica", "bold", 7.5, GREEN); doc.text(ls.sec.toUpperCase(), x, yy + 2.6, { charSpace: 0.6 }); yy += 5; return; }
         if (yy + Math.min(ls.length, 2) * 5.2 > BOTTOM) { newPage(); yy = y; }
-        font("times", "bold", 12, GREEN); doc.text(String(k + 1), x, yy + 11 * PT * 0.8);
+        font("times", "bold", 12, GREEN); doc.text(String(++k), x, yy + 11 * PT * 0.8);
         font("times", "normal", 11, INK);
         ls.forEach(l => { if (yy + 5.2 > BOTTOM) { newPage(); yy = y; } doc.text(l, x + 8, yy + 11 * PT * 0.8); yy += 5.2; });
         yy += 3;

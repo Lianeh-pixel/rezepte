@@ -279,3 +279,21 @@ button { cursor: pointer; }
 .step-ings { margin: 6px 0 0; font-size: 14px; color: var(--muted); line-height: 1.5; }
 .step-ings b, .cook-step-ings b { color: var(--basil); font-weight: 600; font-variant-numeric: tabular-nums; }
 .cook-step-ings { margin: 22px 0 0; font-size: clamp(17px, 2.4vw, 22px); color: var(--muted); line-height: 1.6; max-width: 40ch; }
+/* Abschnitt hinzufügen */
+.sec-add { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+.sec-add label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); font-weight: 600; }
+.sec-add input { font: inherit; font-size: 16px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--fg); }
+.sec-add-btns { display: flex; gap: 8px; }
+/* Zutaten-Abschnitte als Boxen im Formular */
+.ing-boxes { display: flex; flex-direction: column; gap: 12px; width: 100%; }
+.ing-box { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 8px; }
+.ing-box-head { display: flex; align-items: center; gap: 8px; }
+.ing-box-name { flex: 1; min-width: 0; font: inherit; font-size: 16px; font-weight: 700; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: none; color: var(--fg); padding: 6px 2px; }
+.ing-box-name:focus { outline: none; border-bottom-color: var(--basil); }
+.ing-box textarea { width: 100%; }
+.ing-box-del { flex: none; font: inherit; font-size: 13px; color: var(--muted); background: none; border: 0; padding: 6px 4px; cursor: pointer; }
+.ing-box-del[data-sure="1"] { color: var(--danger); font-weight: 600; }
+.ing-boxes:not(.multi) .ing-box-del { display: none; }
+.steps-wrap { counter-reset: s; display: flex; flex-direction: column; gap: 10px; }
+.steps-wrap .steps { counter-reset: none; }
+.steps-wrap > .sec:first-child { margin-bottom: 4px; }
