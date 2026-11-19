@@ -394,6 +394,7 @@ function renderList() {
         h("img", { class: "logo-l", src: "icons/icon.svg", alt: "", width: "36", height: "36" }), h("img", { class: "logo-d", src: "icons/icon-dark.svg", alt: "", width: "36", height: "36" })),
       menuOpen ? h("div", { class: "h-menu", role: "menu" },
         h("button", { role: "menuitemcheckbox", "aria-checked": state.favOnly ? "true" : "false", onclick: () => { state.favOnly = !state.favOnly; state.menuOpen = false; render(); } }, state.favOnly ? "Alle Rezepte zeigen" : "Nur Favoriten zeigen"),
+        h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; render(); shareApp(); } }, "Rezeptbuch teilen"),
         state.recipes.length ? h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; render(); exportPdf(state.recipes, "Rezeptbuch.pdf"); } }, "Alle in einer PDF") : null,
         state.recipes.length ? h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; render(); exportPdfEach(sortedForPdf()); } }, "Alle als einzelne PDFs") : null,
         isGuest() ? null : h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; render(); pickImportPhotos(); } }, "Fotos aus anderer Quelle übernehmen"),
@@ -1578,6 +1579,11 @@ async function exportPdf(recipes, filename) {
 }
 // Jedes Rezept als eigene PDF, zusammen in einer ZIP-Datei (am Tablet/Handy direkt über Teilen)
 function sortedForPdf() { return state.recipes.slice().sort((a, b) => { const ca = a.category || "~", cb = b.category || "~"; return ca.localeCompare(cb, "de") || (a.title || "").localeCompare(b.title || "", "de"); }); }
+async function shareApp() {
+  const url = location.origin + location.pathname;
+  if (navigator.share) { try { await navigator.share({ title: "Rezeptbuch", text: "Mein Rezeptbuch", url }); return; } catch (e) { if (e && e.name === "AbortError") return; } }
+  try { await navigator.clipboard.writeText(url); toast("Link kopiert: " + url, 5000); } catch (e) { toast(url, 8000); }
+}
 async function exportPdfEach(recipes) {
   if (!window.jspdf) { toast("PDF-Export lädt noch. Bitte gleich noch einmal tippen."); return; }
   const files = [], used = new Set();
