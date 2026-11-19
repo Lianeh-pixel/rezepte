@@ -458,7 +458,7 @@ function renderDetail(id) {
     r.category ? h("div", { class: "sec" }, r.category) : null,
     h("h2", { class: "d-title" }, r.title),
     meta,
-    r.notes ? h("p", { class: "notes" }, r.notes) : null,
+    r.notes ? h("p", { class: "notes" }, linkedText(r.notes)) : null,
     nut, two ? null : seg, body,
     r.source ? h("div", { class: "meta d-src" }, "Quelle: ", /^https?:\/\//.test(r.source) ? h("a", { href: r.source, target: "_blank", rel: "noopener" }, r.source.replace(/^https?:\/\/(www\.)?/, "").slice(0, 50)) : r.source) : null,
     stepList(r).length ? h("div", { class: "d-dock" }, h("button", { class: "btn primary", onclick: () => openCook(r) }, icon("play"), "Kochmodus starten")) : null));
