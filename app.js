@@ -562,8 +562,20 @@ function renderCarousel(host, names, groups) {
   car.addEventListener("click", e => { if (moved) { e.preventDefault(); e.stopPropagation(); moved = false; } }, true);
   car.addEventListener("dragstart", e => e.preventDefault());
   sizeCarousel();
+  fitTitles(slides);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => fitTitles(slides));
   car.scrollLeft = idx * step();
   mark(idx);
+}
+// Alle Kapiteltitel einzeilig und gleich groß: die Schriftgröße richtet sich nach dem längsten Titel
+function fitTitles(slides) {
+  const hs = slides.map(s => s.querySelector(".sl-h h2")); if (!hs.length) return;
+  hs.forEach(x => x.style.fontSize = "");
+  const base = parseFloat(getComputedStyle(hs[0]).fontSize) || 30;
+  let size = base;
+  hs.forEach(x => { const avail = x.clientWidth, need = x.scrollWidth; if (avail && need > avail) size = Math.min(size, base * avail / need); });
+  size = Math.max(17, Math.floor(size * 10) / 10);
+  if (size < base) hs.forEach(x => x.style.fontSize = size + "px");
 }
 function sizeCarousel() {
   const w = document.querySelector(".car-wrap"); if (!w) return;
@@ -571,7 +583,7 @@ function sizeCarousel() {
   w.style.height = Math.max(360, window.innerHeight - top) + "px";
 }
 let carWide = window.matchMedia("(min-width: 900px)").matches;
-window.addEventListener("resize", () => { if (!document.querySelector(".car-wrap")) return; const w = window.matchMedia("(min-width: 900px)").matches; if (w !== carWide) { carWide = w; renderGridOnly(); } else sizeCarousel(); });
+window.addEventListener("resize", () => { if (!document.querySelector(".car-wrap")) return; const w = window.matchMedia("(min-width: 900px)").matches; if (w !== carWide) { carWide = w; renderGridOnly(); } else { sizeCarousel(); fitTitles([...document.querySelectorAll(".slide")]); } });
 document.addEventListener("click", e => { if (state.menuOpen && !e.target.closest(".h-tools")) { state.menuOpen = false; render(); } });
 
 const ICONS = {
