@@ -91,6 +91,16 @@ function fmtQty(q) {
   const r = q >= 100 ? Math.round(q) : q >= 10 ? Math.round(q * 2) / 2 : Math.round(q * 10) / 10;
   return String(r).replace(".", ",");
 }
+function consolidate(list) {
+  const out = [], by = new Map();
+  list.filter(i => !i.section && (i.name || i.qty != null)).forEach(i => {
+    const k = norm(String(i.name || "").trim()) + "|" + norm(String(i.unit || "").trim());
+    const o = by.get(k);
+    if (!o) { const c = { ...i }; by.set(k, c); out.push(c); return; }
+    if (i.qty != null) o.qty = (o.qty != null ? o.qty : 0) + i.qty;
+  });
+  return out;
+}
 function ingToLine(i) { return i.section ? i.section + ":" : [fmtQty(i.qty), i.unit, i.name].filter(Boolean).join(" "); }
 // Zutaten, die in einem Zubereitungsschritt vorkommen (automatisch per Name erkannt)
 function normWord(w) { return w.toLowerCase().replace(/ä/g, "a").replace(/ö/g, "o").replace(/ü/g, "u").replace(/ß/g, "ss").replace(/(en|n|e|s)$/, ""); }
@@ -513,10 +523,9 @@ function renderDetail(id) {
       h("button", { "aria-label": "Weniger Portionen", onclick: () => { state.servings[r.id] = Math.max(1, now - 1); render(); } }, "−"),
       h("span", null, servLabel(r, now)),
       h("button", { "aria-label": "Mehr Portionen", onclick: () => { state.servings[r.id] = now + 1; render(); } }, "+")) : null;
-    // group by sections
-    const groups = []; let cur = { title: "", items: [] };
-    (r.ingredients || []).forEach(i => { if (i.section) { if (cur.items.length || cur.title) groups.push(cur); cur = { title: i.section, items: [] }; } else cur.items.push(i); });
-    if (cur.items.length || cur.title) groups.push(cur);
+    // eine zusammengerechnete Liste: gleiche Zutat mit gleicher Einheit wird addiert
+    const all = consolidate(r.ingredients || []);
+    const groups = all.length ? [{ title: "", items: all }] : [];
     body = h("div", null,
       h("div", { class: "d-row" }, h("span", { class: "sec" }, groups[0] && groups[0].title ? groups[0].title : ""), serv),
       groups.length ? groups.map((g, gi) => [gi > 0 ? h("div", { class: "sec d-sec" }, g.title) : null,
