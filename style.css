@@ -690,3 +690,4 @@ a.rlink::after { content: " ›"; text-decoration: none; display: inline-block; 
 .toc .draft .chap .ic { width: 17px; height: 17px; }
 .toc .draft .ln { color: var(--muted); font-style: italic; }
 @media (min-width: 900px) { .home .toc section.draft { margin-top: 18px; padding-top: 6px; } .home .toc .draft ul { columns: 2; column-gap: 72px; } }
+.toc .ln.off { cursor: default; }

@@ -390,6 +390,7 @@ function render() {
   if (state.route.view === "login") { if (state.user) { go(""); return; } return renderLogin(); }
   const r = state.route;
   if (r.view === "edit" && isGuest()) { go(""); return; }
+  if (r.view === "detail" && isGuest()) { const x = findRecipe(r.id); if (x && catRank(x.category) === 2) { go(""); return; } }
   if (r.view === "detail") return renderDetail(r.id);
   if (r.view === "edit") return renderForm(r.id);
   renderList();
@@ -443,6 +444,10 @@ function renderGridOnly() {
       h("h2", { class: "chap" }, draft ? h("b", null, icon("pen"), c) : c, h("span", null, rs.length + (rs.length === 1 ? " Rezept" : " Rezepte"))),
       h("ul", null, rs.map(r => {
         const time = (r.prep_min || 0) + (r.cook_min || 0);
+        if (draft && isGuest()) return h("li", null, h("span", { class: "ln off" },
+          h("span", { class: "t" }, r.title || "Ohne Titel"),
+          h("span", { class: "dots", "aria-hidden": "true" }),
+          h("span", { class: "tm" }, "folgt bald")));
         return h("li", null, h("a", { href: "#rezept-" + r.id, class: "ln" },
           h("span", { class: "t" }, r.title || "Ohne Titel"),
           h("span", { class: "dots", "aria-hidden": "true" }),
