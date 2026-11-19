@@ -430,3 +430,7 @@ h1, h2, h3, .d-title, .chap { font-family: var(--font-display); font-weight: 600
 .f-sec > h3 { font-family: var(--font-body); }
 .toc .chap, .chap { color: var(--basil); }
 .chap span { color: var(--muted); }
+/* Logo: hell = weisse Linien, dunkel = dunkle Linien */
+.h-menu-btn .logo-d { display: none; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .h-menu-btn .logo-l { display: none; } :root:not([data-theme="light"]) .h-menu-btn .logo-d { display: block; } }
+:root[data-theme="dark"] .h-menu-btn .logo-l { display: none; } :root[data-theme="dark"] .h-menu-btn .logo-d { display: block; }

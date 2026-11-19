@@ -308,7 +308,7 @@ function renderList() {
     h("div", { class: "h-tools" },
       !state.online ? h("span", { class: "offline" }, "offline") : null,
       h("button", { class: "h-menu-btn", "aria-label": "Menü", "aria-expanded": menuOpen ? "true" : "false", onclick: () => { state.menuOpen = !menuOpen; render(); } },
-        h("img", { src: "icons/icon.svg", alt: "", width: "36", height: "36" })),
+        h("img", { class: "logo-l", src: "icons/icon.svg", alt: "", width: "36", height: "36" }), h("img", { class: "logo-d", src: "icons/icon-dark.svg", alt: "", width: "36", height: "36" })),
       menuOpen ? h("div", { class: "h-menu", role: "menu" },
         h("button", { role: "menuitemcheckbox", "aria-checked": state.favOnly ? "true" : "false", onclick: () => { state.favOnly = !state.favOnly; state.menuOpen = false; render(); } }, state.favOnly ? "Alle Rezepte zeigen" : "Nur Favoriten zeigen"),
         state.recipes.length ? h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; render(); exportPdf(state.recipes, "Rezeptbuch.pdf"); } }, "Alle als PDF") : null,
