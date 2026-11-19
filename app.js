@@ -563,7 +563,12 @@ function renderCarousel(host, names, groups) {
   car.addEventListener("dragstart", e => e.preventDefault());
   sizeCarousel();
   fitTitles(slides);
-  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => fitTitles(slides));
+  if (document.fonts) {
+    const refit = () => { if (slides[0] && slides[0].isConnected) fitTitles(slides); };
+    document.fonts.ready.then(refit); setTimeout(refit, 800); setTimeout(refit, 2500);
+    document.fonts.load('700 30px "Playfair Display"', "Snacks & Fingerfood").then(refit, () => {});
+    if (!window.__fitHook) { window.__fitHook = true; document.fonts.addEventListener("loadingdone", () => fitTitles([...document.querySelectorAll(".slide")])); }
+  }
   car.scrollLeft = idx * step();
   mark(idx);
 }
