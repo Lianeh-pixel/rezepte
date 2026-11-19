@@ -515,3 +515,6 @@ a.rlink::after { content: " ›"; text-decoration: none; display: inline-block; 
 .d-hero.noimg .d-bar { z-index: 3; }
 .d-blur::after { display: none; } .d-blur { filter: blur(30px); }
 .d-blur::after { display: block; background: linear-gradient(180deg, rgba(255,255,255,0) 15%, rgba(225,245,244,.6) 100%); }
+/* Karte reicht immer bis zum unteren Rand */
+.wrap.full { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; }
+.wrap.full .d-sheet { flex: 1 0 auto; width: 100%; }
