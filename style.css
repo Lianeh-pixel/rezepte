@@ -530,24 +530,37 @@ a.rlink::after { content: " ›"; text-decoration: none; display: inline-block; 
 /* ===== Timer ===== */
 .cook-side { display: flex; flex-direction: column; gap: 16px; margin-top: 22px; }
 .cook-side .cook-step-ings { margin: 0; }
-.tmr-card { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 8px 0; }
-.tmr-round { position: relative; width: 140px; height: 140px; border-radius: 999px; border: 0; display: grid; place-items: center; background: var(--btn); color: var(--basil-ink); font: inherit; cursor: pointer; box-shadow: 0 10px 30px rgba(0,0,0,.18); }
-.tmr-round > .ic { width: 60px; height: 60px; stroke-width: 1.8; }
-.tmr-round.run { background: transparent; box-shadow: none; cursor: default; }
-.tmr-ring { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
-.tmr-ring circle { fill: none; stroke-width: 8; }
+.tmr-card { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 4px 0; }
+.tmr-round { position: relative; width: 200px; height: 200px; border-radius: 999px; border: 0; padding: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; background: transparent; color: var(--fg); font: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.tmr-ring { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); pointer-events: none; }
+.tmr-ring circle { fill: none; stroke-width: 6; }
 .tmr-ring .bg { stroke: var(--line); }
 .tmr-ring .fg { stroke: var(--basil); stroke-linecap: round; transition: stroke-dashoffset .5s linear; }
-.tmr-left { position: relative; font-size: 32px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--basil); }
+.tmr-left { position: relative; font-size: 46px; font-weight: 400; letter-spacing: .01em; font-variant-numeric: tabular-nums; line-height: 1; }
+.tmr-pp { position: relative; display: grid; place-items: center; height: 34px; }
+.tmr-pp .ic { width: 30px; height: 30px; color: var(--fg); }
+.tmr-round.paused .tmr-left { color: var(--muted); }
 .tmr-round.done { animation: tmrPulse 1s ease-in-out infinite; }
-.tmr-round.done .tmr-left { color: var(--basil-ink); font-size: 26px; }
+.tmr-round.done .tmr-ring .bg { stroke: var(--basil); }
+.tmr-round.done .tmr-left { color: var(--basil); font-weight: 700; font-size: 38px; }
+.tmr-ctrl { display: flex; gap: 10px; }
+.tmr-plus { min-height: 48px; padding: 0 22px; border-radius: 999px; border: 0; background: var(--surface); color: var(--fg); font: inherit; font-size: 18px; font-weight: 500; font-variant-numeric: tabular-nums; cursor: pointer; }
+.tmr-reset { width: 48px; height: 48px; border-radius: 999px; border: 0; display: grid; place-items: center; background: var(--surface); color: var(--fg); cursor: pointer; }
+.tmr-reset .ic { width: 20px; height: 20px; }
 .tmr-info { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 18px; font-size: 16px; color: var(--muted); }
 .tmr-info li { display: inline-flex; align-items: center; gap: 6px; }
 .tmr-info .ic { width: 18px; height: 18px; color: var(--basil); }
-.tmr-card .tmr-stop { margin: 0; min-height: 36px; padding: 0 18px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--fg); font: inherit; font-size: 15px; cursor: pointer; }
 .tmr-bar { position: fixed; z-index: 60; left: 50%; transform: translateX(-50%); top: calc(10px + env(safe-area-inset-top, 0px)); display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; max-width: calc(100vw - 32px); pointer-events: none; }
 .tmr-bar.in-cook { top: calc(14px + env(safe-area-inset-top, 0px)); }
-@media (max-width: 700px) { .tmr-bar.in-cook { top: calc(84px + env(safe-area-inset-top, 0px)); } }
+@media (max-width: 700px) {
+  .tmr-bar.in-cook { top: calc(16px + env(safe-area-inset-top, 0px)); left: max(20px, env(safe-area-inset-left, 0px)); transform: none; justify-content: flex-start; max-width: calc(100vw - 170px); flex-wrap: nowrap; overflow: hidden; }
+  body:has(.tmr-bar.in-cook) .cook-top h2 { visibility: hidden; }
+  .tmr-round { width: 168px; height: 168px; }
+  .tmr-left { font-size: 38px; }
+  .tmr-card { gap: 10px; }
+  .tmr-plus { min-height: 42px; }
+  .tmr-reset { width: 42px; height: 42px; }
+}
 .tmr { pointer-events: auto; display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 6px 0 14px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); color: var(--fg); box-shadow: 0 6px 20px rgba(0,0,0,.18); }
 .tmr .ic { width: 18px; height: 18px; color: var(--basil); }
 .tmr-t { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -576,18 +589,19 @@ a.rlink::after { content: " ›"; text-decoration: none; display: inline-block; 
   .cook-main { gap: 8px; justify-content: center; }
   .cook-main:has(.cook-side) { grid-template-columns: minmax(0, 1fr) 260px; column-gap: 32px; }
   .cook-label { font-size: 12px; }
-  .cook-text { font-size: clamp(19px, 3.2vw, 26px); line-height: 1.3; }
+  .cook-text { font-size: clamp(16px, 2.4vw, 21px); line-height: 1.35; }
   .cook-main .cook-step-ings { padding: 12px 16px; font-size: 15px; border-radius: 16px; }
   .cook-main .cook-step-ings::before { font-size: 11px; margin-bottom: 4px; }
   .cook-main .cook-step-ings .si { padding: 2px 0; }
   .cook-side { gap: 10px; }
-  .tmr-card { gap: 8px; padding: 0; }
-  .tmr-round { width: 96px; height: 96px; }
-  .tmr-round > .ic { width: 42px; height: 42px; }
-  .tmr-left { font-size: 22px; }
+  .tmr-card { gap: 6px; padding: 0; }
+  .tmr-round { width: 132px; height: 132px; gap: 2px; }
+  .tmr-left { font-size: 30px; }
+  .tmr-pp { height: 24px; } .tmr-pp .ic { width: 22px; height: 22px; }
+  .tmr-plus { min-height: 36px; padding: 0 14px; font-size: 15px; }
+  .tmr-reset { width: 36px; height: 36px; }
   .tmr-info { font-size: 14px; gap: 4px 12px; }
   .tmr-info .ic { width: 16px; height: 16px; }
-  .tmr-card .tmr-stop { min-height: 30px; font-size: 13px; }
   .cook-nav .btn { min-height: 46px; font-size: 17px; }
   .cook-ings { font-size: 17px; columns: 3 200px; }
   .tmr-bar.in-cook { top: calc(8px + env(safe-area-inset-top, 0px)); }
@@ -621,3 +635,16 @@ a.rlink::after { content: " ›"; text-decoration: none; display: inline-block; 
 .tmr-temp b { font-size: 18px; color: var(--muted); }
 .tmr-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .tmr-btns .btn { justify-content: center; min-height: 50px; }
+
+.cook-main { justify-content: safe center; }
+@media (orientation: landscape) and (max-height: 520px) {
+  .cook-top h2 { font-size: 15px; }
+  .cook-progress { margin: 0; }
+  .cook-main:has(.cook-side) { grid-template-columns: minmax(0, 1fr) 230px; }
+  .tmr-round { width: 116px; height: 116px; }
+  .tmr-left { font-size: 26px; }
+  .tmr-ring circle { stroke-width: 7; }
+  .tmr-bar.in-cook .tmr { height: 36px; }
+  .tmr-bar.in-cook .tmr-t { font-size: 15px; }
+  .cook-nav .btn { min-height: 42px; font-size: 16px; }
+}

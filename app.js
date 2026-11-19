@@ -447,6 +447,9 @@ const ICONS = {
   timer: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9.5 2.5h5"/>',
   hourglass: '<path d="M6 3h12M6 21h12M7 3c0 5 5 6 5 9s-5 4-5 9M17 3c0 5-5 6-5 9s5 4 5 9"/>',
   snow: '<path d="M12 2v20M3.3 7l17.4 10M3.3 17L20.7 7M9 4l3 2 3-2M9 20l3-2 3 2M4 10.5l3.5-.5L6 6.8M20 13.5l-3.5.5 1.5 3.2M4 13.5l3.5.5L6 17.2M20 10.5l-3.5-.5L18 6.8"/>',
+  play2: '<path d="M8 5.5v13l11-6.5z" fill="currentColor" stroke="none"/>',
+  pause: '<path d="M8 5v14M16 5v14" stroke-width="3.2"/>',
+  reset: '<path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3M4.5 4.5v4h4"/>',
   oven: '<rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 8h18"/><rect x="7" y="11" width="10" height="7" rx="1.5"/><path d="M7 5.5h.01M10.5 5.5h.01"/>',
   flame: '<path d="M12 21c-3.9 0-6.5-2.6-6.5-6 0-3.4 2.6-5.6 4-8.5.4 2 1.6 3.2 2.8 3.2 0-2 .6-4.3 2.2-6.2.8 3.1 4 5.8 4 10 0 4.1-2.7 7.5-6.5 7.5z"/>',
   pot: '<path d="M4 10h16M5 10v7a3 3 0 0 0 3 3h8a3 3 0 0 0 3-3v-7M2.5 10h2M19.5 10h2M9 7c-.9-1.1.9-1.7 0-3M15 7c-.9-1.1.9-1.7 0-3"/>',
@@ -1232,32 +1235,36 @@ function startTimer(sec, name, key) {
   drawTimers(); if (state.cook) drawCook();
   if (!timerTick) timerTick = setInterval(tickTimers, 500);
 }
+function leftOf(t, now) { return t.paused ? t.left : ((t.end - (now || Date.now())) / 1000); }
+function findTimer(id) { return state.timers.find(t => t.id === id); }
+function pauseTimer(id) { const t = findTimer(id); if (!t || t.done) return; if (t.paused) { t.end = Date.now() + t.left * 1000; t.paused = false; } else { t.left = leftOf(t); t.paused = true; } drawTimers(true); if (state.cook) drawCook(); }
+function addMinute(id) { const t = findTimer(id); if (!t) return; if (t.done) { t.done = false; t.rang = 0; t.end = Date.now() + 60000; t.sec = 60; } else if (t.paused) { t.left += 60; t.sec += 60; } else { t.end += 60000; t.sec += 60; } drawTimers(true); if (state.cook) drawCook(); }
 function stopTimer(id) { state.timers = state.timers.filter(t => t.id !== id); drawTimers(); if (state.cook) drawCook(); if (!state.timers.length) { clearInterval(timerTick); timerTick = null; } }
 function tickTimers() {
   const now = Date.now(); let changed = false;
   state.timers.forEach(t => {
-    const left = (t.end - now) / 1000;
-    if (left <= 0 && !t.done) { t.done = true; t.rang = 0; changed = true; }
+    const left = leftOf(t, now);
+    if (left <= 0 && !t.done && !t.paused) { t.done = true; t.rang = 0; changed = true; }
     if (t.done && t.rang < 10 && (!t.last || now - t.last > 4000)) { t.last = now; t.rang++; ring(); }
   });
   if (changed && state.cook) drawCook();
   drawTimers();
-  document.querySelectorAll("[data-tkey]").forEach(n => { const t = state.timers.find(x => x.key === n.dataset.tkey); if (t && !t.done) n.textContent = fmtClock((t.end - now) / 1000); });
-  document.querySelectorAll("[data-tring]").forEach(n => { const t = state.timers.find(x => x.key === n.getAttribute("data-tring")); if (t && !t.done) { const C = 2 * Math.PI * 64; n.setAttribute("stroke-dashoffset", String(C * (1 - Math.max(0, (t.end - now) / 1000) / t.sec))); } });
+  document.querySelectorAll("[data-tkey]").forEach(n => { const t = state.timers.find(x => x.key === n.dataset.tkey); if (t && !t.done) n.textContent = fmtClock(leftOf(t, now)); });
+  document.querySelectorAll("[data-tring]").forEach(n => { const t = state.timers.find(x => x.key === n.getAttribute("data-tring")); if (t && !t.done) { const C = 2 * Math.PI * 64; n.setAttribute("stroke-dashoffset", String(C * (1 - Math.max(0, leftOf(t, now)) / t.sec))); } });
 }
 function curStepKey() { const c = state.cook; return c && c.step >= 0 ? c.r.id + ":" + c.step + ":" : null; }
-function drawTimers() {
+function drawTimers(force) {
   let el = document.getElementById("timers");
   const ck = curStepKey(), list = state.timers.filter(t => !ck || !t.key.startsWith(ck));
   if (!list.length) { el && el.remove(); return; }
   if (!el) { el = h("div", { class: "tmr-bar", id: "timers", "aria-live": "polite" }); document.body.append(el); }
   el.classList.toggle("in-cook", !!state.cook);
-  const now = Date.now(), sig = list.map(t => t.id + (t.done ? "d" : "")).join("|");
-  if (el.dataset.sig === sig) { el.querySelectorAll(".tmr-t").forEach((n, k) => { const t = list[k]; n.textContent = t.done ? "Fertig!" : fmtClock((t.end - now) / 1000); }); return; }
+  const now = Date.now(), sig = list.map(t => t.id + (t.done ? "d" : "") + (t.paused ? "p" : "")).join("|");
+  if (!force && el.dataset.sig === sig) { el.querySelectorAll(".tmr-t").forEach((n, k) => { const t = list[k]; n.textContent = t.done ? "Fertig!" : fmtClock(leftOf(t, now)); }); return; }
   el.dataset.sig = sig;
   el.replaceChildren(...list.map(t => h("div", { class: "tmr" + (t.done ? " done" : ""), onclick: t.done ? () => stopTimer(t.id) : null },
     icon("timer"),
-    h("span", { class: "tmr-t" }, t.done ? "Fertig!" : fmtClock((t.end - now) / 1000)),
+    h("span", { class: "tmr-t" }, t.done ? "Fertig!" : fmtClock(leftOf(t, now)) + (t.paused ? " ⏸" : "")),
     t.name ? h("span", { class: "tmr-n" }, t.name) : null,
     h("button", { class: "tmr-x", "aria-label": t.done ? "Timer ausschalten" : "Timer abbrechen", onclick: () => stopTimer(t.id) }, "×"))));
 }
@@ -1276,25 +1283,28 @@ function openCook(r) {
   drawCook();
 }
 function closeCook() { state.cook = null; releaseWake(); const el = document.getElementById("cook"); el && el.remove(); drawTimers(); }
+// Timer im Kochmodus: Ring mit Zeit, Play/Pause, darunter +1:00 und Zurücksetzen
 function cookTimerCards(c, st) {
   return stepTimers(st.text).map(({ sec, dev, temp }, k) => {
     const key = c.r.id + ":" + c.step + ":" + k, t = state.timers.find(x => x.key === key);
-    const R = 64, C = 2 * Math.PI * R;
-    let round;
-    if (!t) round = h("button", { class: "tmr-round", "aria-label": "Timer starten, " + fmtDur(sec), onclick: () => startTimer(sec, dev || st.sec || ("Schritt " + (c.step + 1)), key) }, icon("timer"));
-    else if (t.done) round = h("button", { class: "tmr-round done", "aria-label": "Timer ausschalten", onclick: () => stopTimer(t.id) }, h("span", { class: "tmr-left" }, "Fertig!"));
-    else {
-      const ring = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-      ring.setAttribute("viewBox", "0 0 140 140"); ring.setAttribute("class", "tmr-ring"); ring.setAttribute("aria-hidden", "true");
-      ring.innerHTML = '<circle cx="70" cy="70" r="' + R + '" class="bg"/><circle cx="70" cy="70" r="' + R + '" class="fg" data-tring="' + key + '" stroke-dasharray="' + C + '" stroke-dashoffset="' + (C * (1 - (t.end - Date.now()) / 1000 / t.sec)) + '"/>';
-      round = h("div", { class: "tmr-round run" }, ring, h("span", { class: "tmr-left", "data-tkey": key }, fmtClock((t.end - Date.now()) / 1000)));
-    }
+    const R = 64, C = 2 * Math.PI * R, now = Date.now();
+    const frac = !t ? 1 : t.done ? 0 : Math.max(0, leftOf(t, now)) / t.sec;
+    const ring = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    ring.setAttribute("viewBox", "0 0 140 140"); ring.setAttribute("class", "tmr-ring"); ring.setAttribute("aria-hidden", "true");
+    ring.innerHTML = '<circle cx="70" cy="70" r="' + R + '" class="bg"/><circle cx="70" cy="70" r="' + R + '" class="fg"' + (t && !t.done ? ' data-tring="' + key + '"' : "") + ' stroke-dasharray="' + C + '" stroke-dashoffset="' + (C * (1 - frac)) + '"/>';
+    const label = !t ? fmtClock(sec) : t.done ? "Fertig!" : fmtClock(leftOf(t, now));
+    const act = !t ? () => startTimer(sec, dev || st.sec || ("Schritt " + (c.step + 1)), key) : t.done ? () => stopTimer(t.id) : () => pauseTimer(t.id);
+    const aria = !t ? "Timer starten" : t.done ? "Timer ausschalten" : t.paused ? "Weiter" : "Pause";
+    const round = h("button", { class: "tmr-round" + (t ? t.done ? " done" : t.paused ? " paused" : " run" : ""), "aria-label": aria, onclick: act }, ring,
+      h("span", { class: "tmr-left", "data-tkey": t && !t.done ? key : null }, label),
+      t && t.done ? null : h("span", { class: "tmr-pp" }, icon(!t || t.paused ? "play2" : "pause")));
     return h("div", { class: "tmr-card" }, round,
-      h("ul", { class: "tmr-info" },
+      t ? h("div", { class: "tmr-ctrl" },
+        h("button", { class: "tmr-plus", onclick: () => addMinute(t.id) }, "+1:00"),
+        h("button", { class: "tmr-reset", "aria-label": "Zurücksetzen", onclick: () => stopTimer(t.id) }, icon("reset"))) : null,
+      dev || temp ? h("ul", { class: "tmr-info" },
         dev ? h("li", null, icon(devIcon(dev)), dev) : null,
-        temp ? h("li", null, icon("thermo"), temp) : null,
-        h("li", null, icon("timer"), fmtDur(sec))),
-      t && !t.done ? h("button", { class: "tmr-stop", onclick: () => stopTimer(t.id) }, "Stopp") : null);
+        temp ? h("li", null, icon("thermo"), temp) : null) : null);
   });
 }
 function cookSide(c, st) {
