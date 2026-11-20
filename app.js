@@ -117,6 +117,12 @@ function basicFactor(i, rr) {
   if (rr.servings && (su || u === "portion" || u === "portionen") ) return q / rr.servings;
   return 1;
 }
+// Rezept plus alle (auch verschachtelt) als Zutat verlinkten Rezepte, für das Einzel-PDF
+function withLinked(r) {
+  const out = [r], seen = new Set([r.id]);
+  for (let k = 0; k < out.length; k++) basicsOf(out[k]).forEach(({ rr }) => { if (!seen.has(rr.id)) { seen.add(rr.id); out.push(rr); } });
+  return out;
+}
 function basicsOf(r) {
   const seen = new Set();
   return consolidate(r.ingredients || []).map(i => ({ i, rr: i.ref && i.ref !== r.id ? findRecipe(i.ref) : null })).filter(x => x.rr && !seen.has(x.rr.id) && seen.add(x.rr.id));
@@ -630,7 +636,7 @@ function renderDetail(id) {
       h("div", null,
         src ? h("button", { class: "round ph-open", "aria-label": nPh > 1 ? nPh + " Fotos ansehen" : "Foto ansehen", onclick: () => openPhotos(r) }, icon("image"), nPh > 1 ? h("span", { class: "ph-n" }, String(nPh)) : null) : null,
         h("button", { class: "round" + (r.favorite ? " fav-on" : ""), "aria-label": r.favorite ? "Favorit entfernen" : "Als Favorit merken", "aria-pressed": r.favorite ? "true" : "false", onclick: () => toggleFav(r) }, icon("heart", r.favorite)),
-        h("button", { class: "round", "aria-label": "Als PDF teilen", onclick: () => exportPdf([r], safeName(r.title) + ".pdf") }, icon("share")),
+        h("button", { class: "round", "aria-label": "Als PDF teilen", onclick: () => exportPdf(withLinked(r), safeName(r.title) + ".pdf", false, r.title || "Rezept") }, icon("share")),
         isGuest() ? null : h("button", { class: "round", "aria-label": "Bearbeiten", onclick: () => go("bearbeiten-" + r.id), disabled: !state.online }, icon("pen")))));
 
   const meta = h("div", { class: "d-meta" },
@@ -1598,11 +1604,11 @@ async function imgData(src, aspect) {
     return { data: c.toDataURL("image/jpeg", 0.88), w: c.width, h: c.height };
   } catch (e) { return null; }
 }
-async function buildPdf(recipes, book) {
+async function buildPdf(recipes, book, title) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   // Titel im PDF-Betrachter: Rezeptname bzw. „Rezeptbuch“ (statt Dateiname wie „downloadfile“)
-  const docTitle = book || recipes.length !== 1 ? "Rezeptbuch" : (recipes[0].title || "Rezept");
+  const docTitle = title || (book || recipes.length !== 1 ? "Rezeptbuch" : (recipes[0].title || "Rezept"));
   doc.setProperties({ title: docTitle, subject: docTitle, author: "Rezeptbuch", creator: "Rezeptbuch" });
   try { doc.viewerPreferences({ DisplayDocTitle: true }); } catch (e) {}
   const PW = 210, PH = 297, M = 20, CW = PW - 2 * M, BOTTOM = PH - 22;
@@ -1820,10 +1826,10 @@ function download(blob, filename) {
   document.body.append(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 10000);
 }
-async function exportPdf(recipes, filename, book) {
+async function exportPdf(recipes, filename, book, title) {
   if (!window.jspdf) { toast("PDF-Export lädt noch. Bitte gleich noch einmal tippen."); return; }
   toast("PDF wird erstellt …");
-  const blob = await buildPdf(recipes, book);
+  const blob = await buildPdf(recipes, book, title);
   const file = new File([blob], filename, { type: "application/pdf" });
   // Auf iPad/iPhone öffnet das Teilen-Menü (Sichern in Dateien, Drucken, AirDrop); sonst normaler Download
   if (navigator.canShare && navigator.canShare({ files: [file] }) && isMobile()) {
