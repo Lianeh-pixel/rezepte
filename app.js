@@ -1663,7 +1663,7 @@ async function buildPdf(recipes, book) {
     font("times", "italic", 11, GREY);
     const noteLines = r.notes ? wrap(r.notes, CW - 20) : [];
     const noteH = noteLines.length ? noteLines.length * 5 + 5 : 0;
-    const src = photoSrc(r);
+    const src = null; // PDF ohne Fotos (Lias Wunsch, v77)
     if (src) {
       const full = CW * 9 / 16, contentH = Math.max(ingH, stepH);
       let ih = Math.min(full, BOTTOM - y - noteH - contentH - 7);
