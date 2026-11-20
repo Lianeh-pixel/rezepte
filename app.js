@@ -1046,9 +1046,7 @@ function stepEditor(v) {
           ? h("button", { type: "button", class: "ing-add rl-add", onclick: e => { e.preventDefault(); timer = null; drawLinks(); } }, icon("timer"), "Timer entfernen")
           : h("button", { type: "button", class: "ing-add rl-add", onclick: e => { e.preventDefault(); openTimerDialog(t => { const tok = "{Timer " + [fmtDur(t.sec), t.dev, t.temp].join(" | ").replace(/( \| )+$/, "") + "}";
             const at = ta.dataset.sel != null ? +ta.dataset.sel : ta.value.length;
-            timer = { tok, idx: Math.max(0, splitSteps(ta.value.slice(0, at)).length - 1) }; drawLinks(); }); } }, icon("timer"), "Timer"),
-        h("button", { type: "button", class: "ing-add rl-add", onclick: e => { e.preventDefault(); openRecipeDialog(null, rr => { if (!rr) return;
-          insertTok(ta, "[[" + rr.title + "]]"); }, true); } }, icon("link"), "Rezept verlinken")].filter(Boolean));
+            timer = { tok, idx: Math.max(0, splitSteps(ta.value.slice(0, at)).length - 1) }; drawLinks(); }); } }, icon("timer"), "Timer")].filter(Boolean));
     };
     const ta = h("textarea", { rows: String(Math.max(5, g.items.length * 2 + 1)), placeholder: "Ofen auf 180 °C vorheizen.\n\nMehl und Eier verrühren.", "aria-label": "Schritte" }, items.join("\n\n"));
     const keepSel = () => { ta.dataset.sel = ta.selectionStart; ta.dataset.selEnd = ta.selectionEnd; };
