@@ -1594,6 +1594,10 @@ async function imgData(src, aspect) {
 async function buildPdf(recipes, book) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: "mm", format: "a4" });
+  // Titel im PDF-Betrachter: Rezeptname bzw. „Rezeptbuch“ (statt Dateiname wie „downloadfile“)
+  const docTitle = book || recipes.length !== 1 ? "Rezeptbuch" : (recipes[0].title || "Rezept");
+  doc.setProperties({ title: docTitle, subject: docTitle, author: "Rezeptbuch", creator: "Rezeptbuch" });
+  try { doc.viewerPreferences({ DisplayDocTitle: true }); } catch (e) {}
   const PW = 210, PH = 297, M = 20, CW = PW - 2 * M, BOTTOM = PH - 22;
   const INK = [33, 33, 30], GREEN = [47, 107, 74], GREY = [110, 110, 104], RULE = [200, 196, 186];
   const PT = 0.3528; // mm pro Punkt
