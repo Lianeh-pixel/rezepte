@@ -424,7 +424,7 @@ function renderList() {
       state.recipes.length ? h("button", { class: "h-fav h-view", "aria-label": state.homeView === "cards" ? "Als Inhaltsverzeichnis zeigen" : "Als Karten zeigen", onclick: () => { state.homeView = state.homeView === "cards" ? "list" : "cards"; try { localStorage.setItem("rb-home", state.homeView); } catch (e) {} state.menuOpen = false; render(); } }, icon(state.homeView === "cards" ? "list" : "cards")) : null,
       h("button", { class: "h-fav" + (state.favOnly ? " on" : ""), "aria-label": state.favOnly ? "Alle Rezepte zeigen" : "Nur Favoriten zeigen", "aria-pressed": state.favOnly ? "true" : "false", onclick: () => { state.favOnly = !state.favOnly; state.menuOpen = false; render(); } }, icon("heart", state.favOnly)),
       h("button", { class: "h-menu-btn", "aria-label": "Menü", "aria-expanded": menuOpen ? "true" : "false", onclick: () => { state.menuOpen = !menuOpen; render(); } },
-        h("img", { class: "logo-l", src: "icons/icon-light.svg?i=3", alt: "", width: "36", height: "36" }), h("img", { class: "logo-d", src: "icons/icon-dark.svg?i=3", alt: "", width: "36", height: "36" })),
+        h("img", { class: "logo-l", src: "icons/icon-light.svg?i=4", alt: "", width: "36", height: "36" }), h("img", { class: "logo-d", src: "icons/icon-dark.svg?i=4", alt: "", width: "36", height: "36" })),
       menuOpen ? h("div", { class: "h-menu", role: "menu" },
         h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; render(); shareApp(); } }, "Rezeptbuch teilen"),
         state.recipes.length ? h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; render(); exportPdf(sortedForPdf(), "Rezeptbuch.pdf", true); } }, "Rezepte herunterladen") : null,
