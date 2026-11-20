@@ -117,6 +117,13 @@ function basicFactor(i, rr) {
   if (rr.servings && (su || u === "portion" || u === "portionen") ) return q / rr.servings;
   return 1;
 }
+// Gesamtzeit inkl. aller (auch verschachtelt) als Zutat verlinkten Rezepte
+function totalTime(r, seen) {
+  seen = seen || new Set([r.id]);
+  let t = (r.prep_min || 0) + (r.cook_min || 0);
+  basicsOf(r).forEach(({ rr }) => { if (!seen.has(rr.id)) { seen.add(rr.id); t += totalTime(rr, seen); } });
+  return t;
+}
 // Rezept plus alle (auch verschachtelt) als Zutat verlinkten Rezepte, für das Einzel-PDF
 function withLinked(r) {
   const out = [r], seen = new Set([r.id]);
@@ -469,7 +476,7 @@ function renderGridOnly() {
     return h("section", draft ? { class: "draft" } : null,
       h("h2", { class: "chap" }, draft ? h("b", null, icon("pen"), c) : c, h("span", null, rs.length + (rs.length === 1 ? " Rezept" : " Rezepte"))),
       h("ul", null, rs.map(r => {
-        const time = (r.prep_min || 0) + (r.cook_min || 0);
+        const time = totalTime(r);
         if (draft && isGuest()) return h("li", null, h("span", { class: "ln off" },
           h("span", { class: "t" }, r.title || "Ohne Titel"),
           h("span", { class: "dots", "aria-hidden": "true" }),
@@ -508,7 +515,7 @@ function renderCarousel(host, names, groups) {
     const rs = groups.get(c).sort((a, b) => a.title.localeCompare(b.title, "de"));
     const draft = catRank(c) === 2;
     const ul = h("ul", { class: "sl-lst" }, rs.map(r => {
-      const time = (r.prep_min || 0) + (r.cook_min || 0);
+      const time = totalTime(r);
       if (draft && isGuest()) return h("li", null, h("span", { class: "sl-ln off" }, h("span", { class: "t" }, r.title || "Ohne Titel"), h("span", { class: "tm" }, "folgt bald")));
       return h("li", null, h("a", { href: "#rezept-" + r.id, class: "sl-ln" }, h("span", { class: "t" }, r.title || "Ohne Titel"), h("span", { class: "tm" }, time ? fmtMin(time) : "")));
     }));
@@ -625,7 +632,7 @@ function renderDetail(id) {
   const f = scaled(r), now = state.servings[r.id] || r.servings;
   const tab = state.tab || "ing";
   const src = photoSrc(r);
-  const total = (r.prep_min || 0) + (r.cook_min || 0);
+  const total = totalTime(r), own = (r.prep_min || 0) + (r.cook_min || 0);
   const n = (r.ingredients || []).some(i => !i.section) ? computeNutrition(r) : null;
 
   const nPh = photoPaths(r).length;
@@ -641,7 +648,7 @@ function renderDetail(id) {
 
   const meta = h("div", { class: "d-meta" },
     r.servings ? h("span", null, icon("people"), servLabel(r, r.servings)) : null,
-    total ? h("span", { title: [r.prep_min ? "Vorbereitung " + fmtMin(r.prep_min) : "", r.cook_min ? "Kochen/Backen " + fmtMin(r.cook_min) : ""].filter(Boolean).join(", ") }, icon("clock"), fmtMin(total)) : null,
+    total ? h("span", { title: [r.prep_min ? "Vorbereitung " + fmtMin(r.prep_min) : "", r.cook_min ? "Kochen/Backen " + fmtMin(r.cook_min) : "", total > own ? "verlinkte Rezepte " + fmtMin(total - own) : ""].filter(Boolean).join(", ") }, icon("clock"), fmtMin(total)) : null,
     null);
 
   const nut = n ? h("div", { class: "d-nut", role: "list", "aria-label": r.servings ? "Nährwerte " + perLabel(r) : "Nährwerte gesamt" },
@@ -1665,7 +1672,7 @@ async function buildPdf(recipes, book, title) {
     font("times", "bold", 28, INK);
     y = lines(wrap(r.title, CW - 10), PW / 2, y, 28, 11, { align: "center" }) + 2;
     ornament(y + 1, 22); y += 7;
-    const facts = [r.servings ? servLabel(r, r.servings) : "", r.prep_min ? "Vorbereitung " + fmtMin(r.prep_min) : "", r.cook_min ? "Kochen/Backen " + fmtMin(r.cook_min) : ""].filter(Boolean).join("   ·   ");
+    const facts = [r.servings ? servLabel(r, r.servings) : "", r.prep_min ? "Vorbereitung " + fmtMin(r.prep_min) : "", r.cook_min ? "Kochen/Backen " + fmtMin(r.cook_min) : "", totalTime(r) > (r.prep_min || 0) + (r.cook_min || 0) ? "Gesamt inkl. verlinkter Rezepte " + fmtMin(totalTime(r)) : ""].filter(Boolean).join("   ·   ");
     if (facts) { font("times", "italic", 11, GREY); y = lines(wrap(facts, CW), PW / 2, y, 11, 5, { align: "center" }) + 4; }
     // Spalten vorbereiten
     const LW = 56, GAP = 9, RX = M + LW + GAP, RW = CW - LW - GAP, QW = 17;
