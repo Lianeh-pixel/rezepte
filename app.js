@@ -598,6 +598,7 @@ const ICONS = {
   image: '<rect x="3" y="5" width="18" height="14" rx="3"/><circle cx="9" cy="10" r="1.8"/><path d="M21 16l-5-5-8 8"/>',
   list: '<path d="M9.5 6H20M9.5 12H20M9.5 18H20"/><path d="M4.5 6h.01M4.5 12h.01M4.5 18h.01" stroke-width="2.8"/>',
   cards: '<rect x="6.5" y="4" width="11" height="16" rx="2.5"/><path d="M3 7.5v9M21 7.5v9"/>',
+  copy: '<rect x="8.5" y="8.5" width="12" height="12" rx="2.5"/><path d="M15.5 8.5V6a2.5 2.5 0 0 0-2.5-2.5H6A2.5 2.5 0 0 0 3.5 6v7A2.5 2.5 0 0 0 6 15.5h2.5"/>',
   chevL: '<path d="M15 4.5L7.5 12l7.5 7.5"/>',
   chevR: '<path d="M9 4.5l7.5 7.5L9 19.5"/>',
   link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>'
@@ -1183,7 +1184,8 @@ function renderForm(id) {
     h("div", { class: "form-actions" },
       h("button", { type: "submit", class: "btn primary", disabled: state.saving }, state.saving ? "Wird gespeichert …" : "Speichern"),
       h("button", { type: "button", class: "btn", onclick: () => r ? go("rezept-" + r.id) : go("") }, "Abbrechen"),
-      r ? h("button", { type: "button", class: "btn danger", style: "margin-left:auto", onclick: () => { state.confirmDelete = true; drawConfirm(); } }, "Löschen") : null),
+      r ? h("button", { type: "button", class: "btn icon-btn", style: "margin-left:auto", title: "Duplizieren", "aria-label": "Rezept duplizieren", disabled: !state.online, onclick: e => duplicateRecipe(r, e.currentTarget) }, icon("copy")) : null,
+      r ? h("button", { type: "button", class: "btn danger icon-btn", title: "Löschen", "aria-label": "Rezept löschen", onclick: () => { state.confirmDelete = true; drawConfirm(); } }, icon("trash")) : null),
     h("div", { id: "confirm-host" }));
   function drawConfirm() {
     const host = form.querySelector("#confirm-host");
@@ -1361,6 +1363,32 @@ async function toggleFav(r) {
   const { error } = await sb.from("recipes").update({ favorite: r.favorite }).eq("id", r.id);
   if (error) { r.favorite = !r.favorite; render(); toast("Favorit konnte nicht gespeichert werden."); }
   else saveCache();
+}
+// Kopie des gespeicherten Rezepts anlegen (Fotos werden mitkopiert, damit beide unabhängig bleiben) und die Kopie zum Bearbeiten öffnen
+async function duplicateRecipe(r, btn) {
+  if (btn) btn.disabled = true;
+  try {
+    const paths = [];
+    for (const p of photoPaths(r)) {
+      const np = state.user.id + "/" + uuid() + ".jpg";
+      const c = await sb.storage.from("photos").copy(p, np);
+      if (!c.error) paths.push(np);
+    }
+    const base = String(r.title || "Rezept").replace(/ \(Kopie( \d+)?\)$/, "");
+    let title = base + " (Kopie)", n = 2;
+    while (state.recipes.some(x => x.title === title)) title = base + " (Kopie " + n++ + ")";
+    const data = { title, category: r.category, servings: r.servings, servings_unit: r.servings_unit, prep_min: r.prep_min, cook_min: r.cook_min,
+      tags: r.tags || [], ingredients: JSON.parse(JSON.stringify(r.ingredients || [])), steps: [...(r.steps || [])], notes: r.notes || "", source: r.source || "",
+      photo_path: paths[0] || null, photos: paths.slice(1), favorite: false };
+    const res = await sb.from("recipes").insert(data).select("id").single();
+    if (res.error) throw res.error;
+    toast("Kopie angelegt");
+    await loadAll();
+    location.replace("#bearbeiten-" + res.data.id);
+  } catch (e) {
+    toast("Duplizieren hat nicht geklappt (" + errText(e) + ").");
+    if (btn) btn.disabled = false;
+  }
 }
 async function deleteRecipe(r) {
   const { error } = await sb.from("recipes").delete().eq("id", r.id);

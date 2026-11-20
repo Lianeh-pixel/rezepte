@@ -771,3 +771,5 @@ a.rlink::after { content: " ›"; text-decoration: none; display: inline-block; 
 /* Kopfzeile: alle drei Symbole gleich gerahmt (v72) */
 .h-menu-btn { width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center; border-radius: 10px; }
 .h-menu-btn img { width: 30px; height: 30px; border-radius: 0; }
+.btn.icon-btn { width: 46px; padding-left: 0; padding-right: 0; display: inline-flex; align-items: center; justify-content: center; }
+.btn.icon-btn .ic { width: 20px; height: 20px; }
