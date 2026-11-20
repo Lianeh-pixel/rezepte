@@ -773,3 +773,12 @@ a.rlink::after { content: " ›"; text-decoration: none; display: inline-block; 
 .h-menu-btn img { width: 30px; height: 30px; border-radius: 0; }
 .btn.icon-btn { width: 46px; padding-left: 0; padding-right: 0; display: inline-flex; align-items: center; justify-content: center; }
 .btn.icon-btn .ic { width: 20px; height: 20px; }
+/* Schritt 0: verlinkte Rezepte (v80) */
+.steps li.zero { counter-increment: none; }
+.steps li.zero::before { content: "0"; }
+.zero-l { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.zero-l a { display: inline-flex; align-items: center; gap: 8px; color: var(--basil); text-decoration: none; font-weight: 600; padding: 4px 0; }
+.zero-l a .ic { width: 17px; height: 17px; }
+.zero-l small { color: var(--muted); font-weight: 400; font-size: 14px; }
+.steps .zero-l li { display: block; counter-increment: none; }
+.steps .zero-l li::before { content: none; display: none; }

@@ -680,8 +680,17 @@ function renderDetail(id) {
   }
   if (two || tab !== "ing") {
     const ingBody = body;
-    body = stepList(r).length ? h("div", { class: "steps-wrap" }, stepGroups(r).filter(g => g.items.length).map((g, gi) => [
-        g.title ? h("div", { class: "sec" + (gi > 0 ? " d-sec" : "") }, g.title) : null,
+    // Schritt 0: Verweis auf die verlinkten Rezepte (nur Ansicht, nicht im Kochmodus)
+    const bas = basicsOf(r);
+    const zero = bas.length ? [h("div", { class: "sec" }, "Vorbereitung"),
+      h("ol", { class: "steps" }, h("li", { class: "zero" }, h("div", null,
+        h("p", null, bas.length === 1 ? "Zuerst dieses Rezept zubereiten:" : "Zuerst diese Rezepte zubereiten:"),
+        h("ul", { class: "zero-l" }, bas.map(({ i, rr }) => h("li", null, h("a", { href: "#rezept-" + rr.id },
+          icon("link"), h("span", null, i.name || rr.title),
+          (i.qty != null || i.unit) ? h("small", null, [fmtQty(i.qty != null ? i.qty * f : null), i.unit].filter(Boolean).join(" ")) : null))))))),
+      (stepGroups(r).find(g => g.items.length) || {}).title ? null : h("div", { class: "sec d-sec" }, "Zubereitung")].filter(Boolean) : [];
+    body = stepList(r).length ? h("div", { class: "steps-wrap" }, zero, stepGroups(r).filter(g => g.items.length).map((g, gi) => [
+        g.title ? h("div", { class: "sec" + (gi > 0 || bas.length ? " d-sec" : "") }, g.title) : null,
         h("ol", { class: "steps" }, g.items.map(s => h("li", null, h("div", null, h("p", null, linkedText(s)), stepTimerLine(s), stepIngLine(r, s, f, "step-ings", g.links)))))]))
       : h("p", { class: "meta" }, "Keine Schritte eingetragen.");
     if (two) body = h("div", { class: "d-cols" },
