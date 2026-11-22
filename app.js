@@ -1439,8 +1439,10 @@ function stepTimers(text) {
 }
 function fmtClock(s) { s = Math.max(0, Math.ceil(s)); const hh = Math.floor(s / 3600), mm = Math.floor(s % 3600 / 60), ss = s % 60; return (hh ? hh + ":" + String(mm).padStart(2, "0") : mm) + ":" + String(ss).padStart(2, "0"); }
 function fmtDur(sec) { const hh = Math.floor(sec / 3600), mm = Math.round(sec % 3600 / 60); if (sec < 60) return sec + " Sek."; return [hh ? hh + " Std." : "", mm ? mm + " Min." : ""].filter(Boolean).join(" "); }
-state.timers = [];
+// Timer werden im Gerät gemerkt: Sie laufen nach Schließen/Neuladen der App weiter (Restzeit aus der Uhrzeit berechnet)
+state.timers = lsGet("rb-timers", []).filter(t => t && t.sec > 0 && !(t.done && Date.now() - t.end > 3600000));
 let audioCtx = null, timerTick = null;
+function saveTimers() { lsSet("rb-timers", state.timers.map(({ id, key, name, sec, end, done, rang, paused, left }) => ({ id, key, name, sec, end, done, rang, paused, left }))); keepAwake(); }
 function unlockAudio() { try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); audioCtx.resume && audioCtx.resume(); } catch (e) {} }
 // Klingeln wie eine alte Eieruhr: schnelles Klöppeln auf eine kleine Glocke
 function ring() {
@@ -1456,21 +1458,22 @@ function ring() {
 function startTimer(sec, name, key) {
   unlockAudio();
   state.timers.push({ id: Date.now() + Math.random(), key: key || "", name: name || "", sec, end: Date.now() + sec * 1000, done: false, rang: 0 });
-  drawTimers(); if (state.cook) drawCook();
+  saveTimers(); drawTimers(); if (state.cook) drawCook();
   if (!timerTick) timerTick = setInterval(tickTimers, 500);
 }
 function leftOf(t, now) { return t.paused ? t.left : ((t.end - (now || Date.now())) / 1000); }
 function findTimer(id) { return state.timers.find(t => t.id === id); }
-function pauseTimer(id) { const t = findTimer(id); if (!t || t.done) return; if (t.paused) { t.end = Date.now() + t.left * 1000; t.paused = false; } else { t.left = leftOf(t); t.paused = true; } drawTimers(true); if (state.cook) drawCook(); }
-function addMinute(id) { const t = findTimer(id); if (!t) return; if (t.done) { t.done = false; t.rang = 0; t.end = Date.now() + 60000; t.sec = 60; } else if (t.paused) { t.left += 60; t.sec += 60; } else { t.end += 60000; t.sec += 60; } drawTimers(true); if (state.cook) drawCook(); }
-function stopTimer(id) { state.timers = state.timers.filter(t => t.id !== id); drawTimers(); if (state.cook) drawCook(); if (!state.timers.length) { clearInterval(timerTick); timerTick = null; } }
+function pauseTimer(id) { const t = findTimer(id); if (!t || t.done) return; if (t.paused) { t.end = Date.now() + t.left * 1000; t.paused = false; } else { t.left = leftOf(t); t.paused = true; } saveTimers(); drawTimers(true); if (state.cook) drawCook(); }
+function addMinute(id) { const t = findTimer(id); if (!t) return; if (t.done) { t.done = false; t.rang = 0; t.end = Date.now() + 60000; t.sec = 60; } else if (t.paused) { t.left += 60; t.sec += 60; } else { t.end += 60000; t.sec += 60; } saveTimers(); drawTimers(true); if (state.cook) drawCook(); }
+function stopTimer(id) { state.timers = state.timers.filter(t => t.id !== id); saveTimers(); drawTimers(); if (state.cook) drawCook(); if (!state.timers.length) { clearInterval(timerTick); timerTick = null; } }
 function tickTimers() {
   const now = Date.now(); let changed = false;
   state.timers.forEach(t => {
     const left = leftOf(t, now);
     if (left <= 0 && !t.done && !t.paused) { t.done = true; t.rang = 0; changed = true; }
-    if (t.done && t.rang < 10 && (!t.last || now - t.last > 4000)) { t.last = now; t.rang++; ring(); }
+    if (t.done && audioCtx && t.rang < 10 && (!t.last || now - t.last > 4000)) { t.last = now; t.rang++; ring(); }
   });
+  if (changed) saveTimers();
   if (changed && state.cook) drawCook();
   drawTimers();
   document.querySelectorAll("[data-tkey]").forEach(n => { const t = state.timers.find(x => x.key === n.dataset.tkey); if (t && !t.done) { const x = fmtClock(leftOf(t, now)); n.textContent = x; n.classList.toggle("long", x.length > 5); } });
@@ -1496,8 +1499,14 @@ function drawTimers(force) {
 // ---------- cooking mode ----------
 async function requestWake() { try { if ("wakeLock" in navigator) { state.wakeLock = await navigator.wakeLock.request("screen"); return true; } } catch (e) {} return false; }
 function releaseWake() { try { state.wakeLock && state.wakeLock.release(); } catch (e) {} state.wakeLock = null; }
+// Bildschirm bleibt an, solange der Kochmodus offen ist oder ein Timer läuft
+function needAwake() { return !!state.cook || state.timers.some(t => !t.paused && !t.done); }
+function keepAwake() { if (needAwake()) { if (!state.wakeLock || state.wakeLock.released) requestWake(); } else if (state.wakeLock) releaseWake(); }
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState !== "visible") return;
+  if (audioCtx && audioCtx.state !== "running") { try { audioCtx.resume(); } catch (e) {} }
+  if (state.timers.length) { tickTimers(); if (!timerTick) timerTick = setInterval(tickTimers, 500); }
+  if (!state.cook) keepAwake();
   if (state.cook) requestWake().then(ok => { if (state.cook) { state.cook.awake = ok; drawCook(); } });
   if (state.online) loadAll();
 });
@@ -1510,7 +1519,7 @@ function openCook(r) {
   requestWake().then(ok => { if (state.cook) { state.cook.awake = ok; drawCook(); } });
   drawCook();
 }
-function closeCook() { state.cook = null; releaseWake(); const el = document.getElementById("cook"); el && el.remove(); drawTimers(); }
+function closeCook() { state.cook = null; releaseWake(); keepAwake(); const el = document.getElementById("cook"); el && el.remove(); drawTimers(); }
 // Timer im Kochmodus: Ring mit Zeit, Play/Pause, darunter +1:00 und Zurücksetzen
 function cookTimerCards(c, st) {
   return stepTimers(st.text).map(({ sec, dev, temp }, k) => {
@@ -1905,4 +1914,7 @@ if ("serviceWorker" in navigator && location.protocol === "https:") {
 }
 state.route = readHash();
 initAuth();
+// Gemerkte Timer nach dem Öffnen weiterlaufen lassen; Ton erst nach der ersten Berührung möglich (Browser-Regel)
+if (state.timers.length) { timerTick = setInterval(tickTimers, 500); setTimeout(tickTimers, 0);
+  ["pointerdown", "keydown"].forEach(ev => document.addEventListener(ev, function u() { unlockAudio(); document.removeEventListener(ev, u); }, { once: true })); }
 })();
