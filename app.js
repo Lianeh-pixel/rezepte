@@ -441,6 +441,7 @@ function renderList() {
       menuOpen ? h("div", { class: "h-menu", role: "menu" },
         h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; render(); shareApp(); } }, "Rezeptbuch teilen"),
         state.recipes.length ? h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; render(); exportPdf(sortedForPdf(), "Rezeptbuch.pdf", true); } }, "Rezepte herunterladen") : null,
+        !isGuest() ? h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; render(); testPush(); } }, "Timer-Mitteilung testen") : null,
         isGuest() ? h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; go("anmelden"); } }, "Anmelden")
           : h("button", { role: "menuitem", onclick: () => { state.menuOpen = false; logout(); } }, "Abmelden")) : null)));
   if (state.loadError) app.append(h("div", { class: "notice" }, state.loadError));
@@ -1458,27 +1459,38 @@ function ring() {
 // ---------- Push-Mitteilungen: Supabase meldet sich, wenn der Timer abläuft (auch bei geschlossener App) ----------
 const PUSH_FN = CFG.supabaseUrl + "/functions/v1/push-timer";
 const canPush = () => !isGuest() && "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
-let pushEp = null;
+let pushEp = null, pushWhy = "", pushWarned = false;
 function b64uBytes(s) { const b = atob(s.replace(/-/g, "+").replace(/_/g, "/")); return Uint8Array.from(b, c => c.charCodeAt(0)); }
+const PUSH_BLOCKED = "Mitteilungen sind für das Rezeptbuch blockiert. Bitte in den Einstellungen erlauben (Android: lange auf das App-Symbol drücken → App-Info → Benachrichtigungen).";
 async function ensurePush() {
-  if (!canPush()) return null;
+  pushWhy = "";
+  if (isGuest()) return null;
+  if (!canPush()) { pushWhy = "Dieses Gerät kann hier keine Mitteilungen anzeigen. Auf dem iPad bitte die App vom Home-Bildschirm öffnen."; return null; }
   // Erlaubnis direkt beim Tippen erfragen (Browser verlangen eine Berührung)
-  if (Notification.permission === "default") { try { if (await Notification.requestPermission() !== "granted") return null; } catch (e) { return null; } }
-  if (Notification.permission !== "granted") return null;
+  if (Notification.permission === "default") { try { await Notification.requestPermission(); } catch (e) {} }
+  if (Notification.permission !== "granted") { pushWhy = PUSH_BLOCKED; return null; }
   if (pushEp) return pushEp;
   try {
-    const reg = await navigator.serviceWorker.ready;
+    const reg = await Promise.race([navigator.serviceWorker.ready, new Promise((_, no) => setTimeout(() => no(new Error("Hintergrunddienst nicht bereit")), 8000))]);
     let s = await reg.pushManager.getSubscription();
     if (!s) { const { pub } = await (await fetch(PUSH_FN)).json(); s = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64uBytes(pub) }); }
     const j = s.toJSON();
     const { error } = await sb.from("push_subs").upsert({ endpoint: j.endpoint, sub: j }, { onConflict: "endpoint" });
-    if (error) return null;
+    if (error) throw error;
     return (pushEp = j.endpoint);
-  } catch (e) { return null; }
+  } catch (e) { pushWhy = "Mitteilung konnte nicht eingerichtet werden: " + (e && e.message || e); return null; }
+}
+// Menü: Test-Mitteilung in 10 Sekunden
+async function testPush() {
+  const ep = await ensurePush();
+  if (!ep) { toast(pushWhy || "Mitteilungen sind hier nicht möglich.", 9000); return; }
+  const { error } = await sb.from("push_timers").insert({ id: "test-" + Date.now(), endpoint: ep, fire_at: new Date(Date.now() + 10000).toISOString(), title: "Test: Timer fertig", body: "So meldet sich ein Timer, wenn die App zu ist." });
+  toast(error ? "Test hat nicht geklappt: " + error.message : "Test-Mitteilung kommt in etwa 15 Sekunden. Du kannst die App jetzt schließen.", 8000);
 }
 async function pushTimer(t) {
   try {
-    const ep = await ensurePush(); if (!ep) return;
+    const ep = await ensurePush();
+    if (!ep) { if (pushWhy && !pushWarned) { pushWarned = true; toast(pushWhy, 9000); } return; }
     const id = String(t.id);
     if (t.paused || t.done || !state.timers.includes(t)) { await sb.from("push_timers").delete().eq("id", id); return; }
     const r = state.recipes.find(x => t.key && t.key.startsWith(x.id + ":"));
