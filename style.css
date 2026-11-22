@@ -548,6 +548,7 @@ a.rlink::after { content: " ›"; text-decoration: none; display: inline-block; 
 .tmr-reset { width: 48px; height: 48px; border-radius: 999px; border: 0; display: grid; place-items: center; background: var(--surface); color: var(--fg); cursor: pointer; }
 .tmr-reset .ic { width: 20px; height: 20px; }
 .tmr-info { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 18px; font-size: 16px; color: var(--muted); }
+.dlg-text { margin: 4px 0 18px; line-height: 1.5; color: var(--fg); }
 .tmr-note { margin: 0; max-width: 220px; text-align: center; font-size: 13px; line-height: 1.4; color: var(--muted); font-style: italic; }
 .tmr-info li { display: inline-flex; align-items: center; gap: 6px; }
 .tmr-info .ic { width: 18px; height: 18px; color: var(--basil); }
