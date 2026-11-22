@@ -1563,6 +1563,19 @@ function openCook(r) {
   drawCook();
 }
 function closeCook() { state.cook = null; releaseWake(); keepAwake(); const el = document.getElementById("cook"); el && el.remove(); drawTimers(); }
+// Gäste: Beim Start erscheint ein Fenster mit dem laufenden Timer und dem Hinweis, dass er nur bei geöffneter App klingelt
+function guestTimerDialog(key) {
+  const t = state.timers.find(x => x.key === key); if (!t) return;
+  const close = () => { ov.remove(); document.removeEventListener("keydown", esc); };
+  const esc = e => { if (e.key === "Escape") close(); };
+  const box = h("div", { class: "dlg tmr-dlg gast-tmr", role: "dialog", "aria-modal": "true", "aria-label": "Timer läuft" },
+    h("div", { class: "tmr-head" }, h("span", { class: "tmr-head-ic" }, icon("timer")), h("h3", null, t.name ? t.name + " läuft" : "Timer läuft")),
+    h("div", { class: "gast-clock", "data-tkey": key }, fmtClock(leftOf(t))),
+    h("p", { class: "dlg-text" }, "Der Timer klingelt nur, solange die App geöffnet ist. Lass die App also beim Kochen offen."),
+    h("div", { class: "dlg-btns" }, h("button", { type: "button", class: "btn primary", onclick: close }, "Verstanden")));
+  const ov = h("div", { class: "dlg-ov", onclick: e => { if (e.target === ov) close(); } }, box);
+  document.body.append(ov); document.addEventListener("keydown", esc);
+}
 // Timer im Kochmodus: Ring mit Zeit, Play/Pause, darunter +1:00 und Zurücksetzen
 function cookTimerCards(c, st) {
   return stepTimers(st.text).map(({ sec, dev, temp }, k) => {
@@ -1573,7 +1586,8 @@ function cookTimerCards(c, st) {
     ring.setAttribute("viewBox", "0 0 140 140"); ring.setAttribute("class", "tmr-ring"); ring.setAttribute("aria-hidden", "true");
     ring.innerHTML = '<circle cx="70" cy="70" r="' + R + '" class="bg"/><circle cx="70" cy="70" r="' + R + '" class="fg"' + (t && !t.done ? ' data-tring="' + key + '"' : "") + ' stroke-dasharray="' + C + '" stroke-dashoffset="' + (C * (1 - frac)) + '"/>';
     const label = !t ? fmtClock(sec) : t.done ? "Fertig!" : fmtClock(leftOf(t, now));
-    const act = !t ? () => startTimer(sec, dev || st.sec || ("Schritt " + (c.step + 1)), key) : t.done ? () => stopTimer(t.id) : () => pauseTimer(t.id);
+    const go = () => startTimer(sec, dev || st.sec || ("Schritt " + (c.step + 1)), key);
+    const act = !t ? () => { go(); if (isGuest()) guestTimerDialog(key); } : t.done ? () => stopTimer(t.id) : () => pauseTimer(t.id);
     const aria = !t ? "Timer starten" : t.done ? "Timer ausschalten" : t.paused ? "Weiter" : "Pause";
     const round = h("button", { class: "tmr-round" + (t ? t.done ? " done" : t.paused ? " paused" : " run" : ""), "aria-label": aria, onclick: act }, ring,
       h("span", { class: "tmr-left" + (label.length > 5 ? " long" : ""), "data-tkey": t && !t.done ? key : null }, label),
@@ -1584,7 +1598,9 @@ function cookTimerCards(c, st) {
         h("button", { class: "tmr-reset", "aria-label": "Zurücksetzen", onclick: () => stopTimer(t.id) }, icon("reset"))) : null,
       dev || temp ? h("ul", { class: "tmr-info" },
         dev ? h("li", null, icon(devIcon(dev)), dev) : null,
-        temp ? h("li", null, icon("thermo"), temp) : null) : null);
+        temp ? h("li", null, icon("thermo"), temp) : null) : null,
+      // Gäste bekommen keine Push-Mitteilung: kurzer Hinweis unter dem Timer
+      isGuest() ? h("p", { class: "tmr-note" }, "Der Timer klingelt nur, solange die App geöffnet ist.") : null);
   });
 }
 function cookSide(c, st) {
