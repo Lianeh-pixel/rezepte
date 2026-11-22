@@ -1455,17 +1455,48 @@ function ring() {
   } catch (e) {}
   try { navigator.vibrate && navigator.vibrate([400, 120, 400, 120, 400]); } catch (e) {}
 }
+// ---------- Push-Mitteilungen: Supabase meldet sich, wenn der Timer abläuft (auch bei geschlossener App) ----------
+const PUSH_FN = CFG.supabaseUrl + "/functions/v1/push-timer";
+const canPush = () => !isGuest() && "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+let pushEp = null;
+function b64uBytes(s) { const b = atob(s.replace(/-/g, "+").replace(/_/g, "/")); return Uint8Array.from(b, c => c.charCodeAt(0)); }
+async function ensurePush() {
+  if (!canPush()) return null;
+  // Erlaubnis direkt beim Tippen erfragen (Browser verlangen eine Berührung)
+  if (Notification.permission === "default") { try { if (await Notification.requestPermission() !== "granted") return null; } catch (e) { return null; } }
+  if (Notification.permission !== "granted") return null;
+  if (pushEp) return pushEp;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    let s = await reg.pushManager.getSubscription();
+    if (!s) { const { pub } = await (await fetch(PUSH_FN)).json(); s = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64uBytes(pub) }); }
+    const j = s.toJSON();
+    const { error } = await sb.from("push_subs").upsert({ endpoint: j.endpoint, sub: j }, { onConflict: "endpoint" });
+    if (error) return null;
+    return (pushEp = j.endpoint);
+  } catch (e) { return null; }
+}
+async function pushTimer(t) {
+  try {
+    const ep = await ensurePush(); if (!ep) return;
+    const id = String(t.id);
+    if (t.paused || t.done || !state.timers.includes(t)) { await sb.from("push_timers").delete().eq("id", id); return; }
+    const r = state.recipes.find(x => t.key && t.key.startsWith(x.id + ":"));
+    await sb.from("push_timers").upsert({ id, endpoint: ep, fire_at: new Date(t.end).toISOString(), title: (t.name || "Timer") + " ist fertig", body: r ? r.title : "Dein Timer ist abgelaufen", sent: false });
+  } catch (e) {}
+}
+function closeNote(t) { try { navigator.serviceWorker.ready.then(reg => reg.getNotifications({ tag: "timer-" + t.id })).then(ns => ns.forEach(n => n.close())); } catch (e) {} }
 function startTimer(sec, name, key) {
   unlockAudio();
   state.timers.push({ id: Date.now() + Math.random(), key: key || "", name: name || "", sec, end: Date.now() + sec * 1000, done: false, rang: 0 });
-  saveTimers(); drawTimers(); if (state.cook) drawCook();
+  saveTimers(); drawTimers(); if (state.cook) drawCook(); pushTimer(state.timers[state.timers.length - 1]);
   if (!timerTick) timerTick = setInterval(tickTimers, 500);
 }
 function leftOf(t, now) { return t.paused ? t.left : ((t.end - (now || Date.now())) / 1000); }
 function findTimer(id) { return state.timers.find(t => t.id === id); }
-function pauseTimer(id) { const t = findTimer(id); if (!t || t.done) return; if (t.paused) { t.end = Date.now() + t.left * 1000; t.paused = false; } else { t.left = leftOf(t); t.paused = true; } saveTimers(); drawTimers(true); if (state.cook) drawCook(); }
-function addMinute(id) { const t = findTimer(id); if (!t) return; if (t.done) { t.done = false; t.rang = 0; t.end = Date.now() + 60000; t.sec = 60; } else if (t.paused) { t.left += 60; t.sec += 60; } else { t.end += 60000; t.sec += 60; } saveTimers(); drawTimers(true); if (state.cook) drawCook(); }
-function stopTimer(id) { state.timers = state.timers.filter(t => t.id !== id); saveTimers(); drawTimers(); if (state.cook) drawCook(); if (!state.timers.length) { clearInterval(timerTick); timerTick = null; } }
+function pauseTimer(id) { const t = findTimer(id); if (!t || t.done) return; if (t.paused) { t.end = Date.now() + t.left * 1000; t.paused = false; } else { t.left = leftOf(t); t.paused = true; } saveTimers(); pushTimer(t); drawTimers(true); if (state.cook) drawCook(); }
+function addMinute(id) { const t = findTimer(id); if (!t) return; if (t.done) { t.done = false; t.rang = 0; t.end = Date.now() + 60000; t.sec = 60; } else if (t.paused) { t.left += 60; t.sec += 60; } else { t.end += 60000; t.sec += 60; } saveTimers(); pushTimer(t); drawTimers(true); if (state.cook) drawCook(); }
+function stopTimer(id) { const old = findTimer(id); state.timers = state.timers.filter(t => t.id !== id); saveTimers(); if (old) { pushTimer(old); closeNote(old); } drawTimers(); if (state.cook) drawCook(); if (!state.timers.length) { clearInterval(timerTick); timerTick = null; } }
 function tickTimers() {
   const now = Date.now(); let changed = false;
   state.timers.forEach(t => {
