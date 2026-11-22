@@ -1584,7 +1584,9 @@ function cookTimerCards(c, st) {
         h("button", { class: "tmr-reset", "aria-label": "Zurücksetzen", onclick: () => stopTimer(t.id) }, icon("reset"))) : null,
       dev || temp ? h("ul", { class: "tmr-info" },
         dev ? h("li", null, icon(devIcon(dev)), dev) : null,
-        temp ? h("li", null, icon("thermo"), temp) : null) : null);
+        temp ? h("li", null, icon("thermo"), temp) : null) : null,
+      // Gäste bekommen keine Push-Mitteilung: kurzer Hinweis unter dem Timer
+      isGuest() ? h("p", { class: "tmr-note" }, "Der Timer klingelt nur, solange die App geöffnet ist.") : null);
   });
 }
 function cookSide(c, st) {
