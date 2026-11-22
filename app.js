@@ -1563,16 +1563,16 @@ function openCook(r) {
   drawCook();
 }
 function closeCook() { state.cook = null; releaseWake(); keepAwake(); const el = document.getElementById("cook"); el && el.remove(); drawTimers(); }
-// Gäste: einmal pro Gerät bestätigen, dass der Timer nur bei geöffneter App klingelt
-function guestTimerDialog(start) {
+// Gäste: Beim Start erscheint ein Fenster mit dem laufenden Timer und dem Hinweis, dass er nur bei geöffneter App klingelt
+function guestTimerDialog(key) {
+  const t = state.timers.find(x => x.key === key); if (!t) return;
   const close = () => { ov.remove(); document.removeEventListener("keydown", esc); };
   const esc = e => { if (e.key === "Escape") close(); };
-  const box = h("div", { class: "dlg tmr-dlg", role: "dialog", "aria-modal": "true", "aria-label": "Hinweis zum Timer" },
-    h("div", { class: "tmr-head" }, h("span", { class: "tmr-head-ic" }, icon("timer")), h("h3", null, "Hinweis")),
+  const box = h("div", { class: "dlg tmr-dlg gast-tmr", role: "dialog", "aria-modal": "true", "aria-label": "Timer läuft" },
+    h("div", { class: "tmr-head" }, h("span", { class: "tmr-head-ic" }, icon("timer")), h("h3", null, t.name ? t.name + " läuft" : "Timer läuft")),
+    h("div", { class: "gast-clock", "data-tkey": key }, fmtClock(leftOf(t))),
     h("p", { class: "dlg-text" }, "Der Timer klingelt nur, solange die App geöffnet ist. Lass die App also beim Kochen offen."),
-    h("div", { class: "dlg-btns" },
-      h("button", { type: "button", class: "btn", onclick: close }, "Abbrechen"),
-      h("button", { type: "button", class: "btn primary", onclick: () => { lsSet("rb-gast-timer-ok", true); close(); start(); } }, "Timer starten")));
+    h("div", { class: "dlg-btns" }, h("button", { type: "button", class: "btn primary", onclick: close }, "Verstanden")));
   const ov = h("div", { class: "dlg-ov", onclick: e => { if (e.target === ov) close(); } }, box);
   document.body.append(ov); document.addEventListener("keydown", esc);
 }
@@ -1587,7 +1587,7 @@ function cookTimerCards(c, st) {
     ring.innerHTML = '<circle cx="70" cy="70" r="' + R + '" class="bg"/><circle cx="70" cy="70" r="' + R + '" class="fg"' + (t && !t.done ? ' data-tring="' + key + '"' : "") + ' stroke-dasharray="' + C + '" stroke-dashoffset="' + (C * (1 - frac)) + '"/>';
     const label = !t ? fmtClock(sec) : t.done ? "Fertig!" : fmtClock(leftOf(t, now));
     const go = () => startTimer(sec, dev || st.sec || ("Schritt " + (c.step + 1)), key);
-    const act = !t ? () => (isGuest() && !lsGet("rb-gast-timer-ok", false) ? guestTimerDialog(go) : go()) : t.done ? () => stopTimer(t.id) : () => pauseTimer(t.id);
+    const act = !t ? () => { go(); if (isGuest()) guestTimerDialog(key); } : t.done ? () => stopTimer(t.id) : () => pauseTimer(t.id);
     const aria = !t ? "Timer starten" : t.done ? "Timer ausschalten" : t.paused ? "Weiter" : "Pause";
     const round = h("button", { class: "tmr-round" + (t ? t.done ? " done" : t.paused ? " paused" : " run" : ""), "aria-label": aria, onclick: act }, ring,
       h("span", { class: "tmr-left" + (label.length > 5 ? " long" : ""), "data-tkey": t && !t.done ? key : null }, label),
