@@ -1,6 +1,6 @@
 /* Offline-Unterstützung: App-Dateien werden zwischengespeichert, Daten kommen immer frisch von Supabase. */
-const VERSION = "rb-v86";
-const SHELL = ["./", "index.html", "style.css", "app.js", "config.js", "nutrition.js", "vendor/supabase.js", "vendor/jspdf.umd.min.js", "manifest.webmanifest?i=7", "icons/icon-192.png?i=7", "icons/icon-512.png?i=7", "icons/icon-maskable-512.png?i=7", "icons/icon-monochrome-512.png?i=7", "icons/apple-touch-icon.png?i=7", "icons/icon.svg?i=7", "icons/icon-dark.svg?i=4", "icons/icon-light.svg?i=4", "icons/standard.svg", "icons/kat-kuchen.svg", "icons/kat-kekse.svg", "icons/kat-brot.svg", "icons/kat-dessert.svg", "icons/kat-hauptgericht.svg", "icons/kat-suppen.svg", "icons/kat-saucen.svg", "icons/kat-beilagen.svg", "icons/kat-grundrezepte.svg", "icons/favicon-32.png?i=7"];
+const VERSION = "rb-v87";
+const SHELL = ["./", "index.html", "style.css", "app.js", "config.js", "nutrition.js", "vendor/supabase.js", "vendor/jspdf.umd.min.js", "manifest.webmanifest?i=8", "icons/icon-192.png?i=8", "icons/icon-512.png?i=8", "icons/icon-maskable-512.png?i=8", "icons/icon-monochrome-512.png?i=8", "icons/apple-touch-icon.png?i=8", "icons/icon.svg?i=8", "icons/icon-dark.svg?i=4", "icons/icon-light.svg?i=4", "icons/standard.svg", "icons/kat-kuchen.svg", "icons/kat-kekse.svg", "icons/kat-brot.svg", "icons/kat-dessert.svg", "icons/kat-hauptgericht.svg", "icons/kat-suppen.svg", "icons/kat-saucen.svg", "icons/kat-beilagen.svg", "icons/kat-grundrezepte.svg", "icons/favicon-32.png?i=8"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener("activate", e => { e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== VERSION).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener("fetch", e => {
@@ -22,7 +22,7 @@ self.addEventListener("push", e => {
   e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(cs => self.registration.showNotification(d.title || "Timer fertig", {
     body: d.body || "", tag: d.tag || "timer", renotify: true, requireInteraction: true,
     silent: cs.some(c => c.visibilityState === "visible"), // App offen: dort klingelt schon die Eieruhr
-    icon: "icons/icon-192.png?i=7", badge: "icons/icon-monochrome-512.png?i=7", vibrate: [400, 120, 400, 120, 400] })));
+    icon: "icons/icon-192.png?i=8", badge: "icons/icon-monochrome-512.png?i=8", vibrate: [400, 120, 400, 120, 400] })));
 });
 self.addEventListener("notificationclick", e => {
   e.notification.close();
